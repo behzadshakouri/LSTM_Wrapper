@@ -128,7 +128,7 @@ int main()
     // Change the names of these files as necessary. They should be correct
     // already, if your program's working directory contains the data and/or
     // model.
-    const string dataFile = "../../../data/Google2016-2019.csv";
+    const string dataFile = "/home/behzad/Projects/LSTM_TRY/Google2016-2019.csv";
     // example: const string dataFile =
     //              "C:/mlpack-model-app/Google2016-2019.csv";
     // example: const string dataFile =
@@ -140,7 +140,8 @@ int main()
     // example: const string modelFile =
     //              "/home/user/mlpack-model-app/lstm_multi.bin";
 
-    const string predFile = "lstm_multi_predictions.csv";
+    const string predFile_Test = "lstm_multi_predictions_test.csv";
+    const string predFile_Train = "lstm_multi_predictions_train.csv";
 
     // If true, the model will be trained; if false, the saved model will be
     // read and used for prediction
@@ -167,7 +168,7 @@ int main()
     // Number of data points in each iteration of SGD.
     const size_t BATCH_SIZE = 16;
 
-    // Nunmber of timesteps to look backward for in the RNN.
+    // Number of timesteps to look backward for in the RNN.
     const int rho = 25;
 
     arma::mat dataset;
@@ -184,7 +185,7 @@ int main()
     dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1);
 
     // We have 5 input data columns and 2 output columns (target).
-    size_t inputSize = 5, outputSize = 2;
+    size_t inputSize = 5, outputSize = 2; //5,2
 
     // Split the dataset into training and validation sets.
     arma::mat trainData;
@@ -192,7 +193,7 @@ int main()
     data::Split(dataset, trainData, testData, RATIO, false);
 
     // Number of epochs for training.
-    const int EPOCHS = 150;
+    const int EPOCHS = 3; // 150
 
     // Scale all data into the range (0, 1) for increased numerical stability.
     data::MinMaxScaler scale;
@@ -288,16 +289,23 @@ int main()
     RNN<MeanSquaredError, HeInitialization> modelP(rho);
     cout << "Loading model ..." << endl;
     data::Load(modelFile, "LSTMMulti", modelP);
-    arma::cube predOutP;
+
+    arma::cube predOutP_Test;
+    arma::cube predOutP_Train;
 
     // Get predictions on test data points.
-    modelP.Predict(testX, predOutP);
+    modelP.Predict(testX, predOutP_Test);
+    modelP.Predict(trainX, predOutP_Train);
     // Calculate MSE on prediction.
-    double testMSEP = ComputeMSE(predOutP, testY);
-    cout << "Mean Squared Error on Prediction data points:= " << testMSEP << endl;
+    double testMSEP = ComputeMSE(predOutP_Test, testY);
+    cout << "Mean Squared Error on Prediction data points for test Data:= " << testMSEP << endl;
+
+    double trainMSEP = ComputeMSE(predOutP_Train, trainY);
+    cout << "Mean Squared Error on Prediction data points for train Data:= " << trainMSEP << endl;
 
     // Save the output predictions and show the results.
-    SaveResults(predFile, predOutP, scale, testX);
+    SaveResults(predFile_Test, predOutP_Test, scale, testX);
+    SaveResults(predFile_Train, predOutP_Train, scale, trainX);
 
     // Use this on Windows in order to keep the console window open.
     // cout << "Ready!" << endl;
