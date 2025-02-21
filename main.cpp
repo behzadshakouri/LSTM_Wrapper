@@ -31,6 +31,9 @@ date  close  volume  open  high  low
 ...
 */
 
+#include <QDebug>
+
+
 #define MLPACK_ENABLE_ANN_SERIALIZATION
 #include <mlpack.hpp>
 
@@ -66,12 +69,15 @@ void CreateTimeSeriesData(InputDataType dataset,
 {
     for (size_t i = 0; i < dataset.n_cols - rho; i++)
     {
-        X.subcube(arma::span(), arma::span(i), arma::span()) =
-            dataset.submat(arma::span(), arma::span(i, i + rho - 1));
-        y.subcube(arma::span(), arma::span(i), arma::span()) =
-            dataset.submat(arma::span(3, 4), arma::span(i + 1, i + rho));
+        //arma::cube LHS = X.subcube(arma::span(), arma::span(i), arma::span());
+        //qDebug()<<LHS.n_rows<<","<<LHS.n_cols<<","<<LHS.n_slices;
+        //arma::mat RHS = dataset.submat(arma::span(0), arma::span(i, i + rho - 1));
+        //qDebug()<<RHS.n_rows<<","<<RHS.n_cols;
+        X.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(0,8), arma::span(i, i + rho - 1)); //col 0 input
+        y.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(9,10), arma::span(i + 1, i + rho)); //col 1 output , dataset.submat(arma::span(3, 4), arma::span(i + 1, i + rho))
     }
 }
+
 
 /**
  * This function saves the input data for prediction and the prediction results
@@ -128,7 +134,7 @@ int main()
     // Change the names of these files as necessary. They should be correct
     // already, if your program's working directory contains the data and/or
     // model.
-    const string dataFile = "/home/behzad/Projects/LSTM_TRY/Google2016-2019.csv";
+    const string dataFile = "/home/behzad/Projects/LSTM_TRY/ASM_2.txt";
     // example: const string dataFile =
     //              "C:/mlpack-model-app/Google2016-2019.csv";
     // example: const string dataFile =
@@ -182,18 +188,21 @@ int main()
     // The first column in the CSV is the date which is not required, therefore
     // we remove it also (first row in in arma::mat).
 
-    dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1);
+    dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1); //Elimiate the first column
 
     // We have 5 input data columns and 2 output columns (target).
-    size_t inputSize = 5, outputSize = 2; //5,2
+    size_t inputSize = 9, outputSize = 2; //5,2
 
     // Split the dataset into training and validation sets.
     arma::mat trainData;
     arma::mat testData;
     data::Split(dataset, trainData, testData, RATIO, false);
 
+    trainData.save("trainData_bs.csv", arma::csv_ascii);
+    testData.save("testData_bs.csv", arma::csv_ascii);
+
     // Number of epochs for training.
-    const int EPOCHS = 3; // 150
+    const int EPOCHS = 150; // 150
 
     // Scale all data into the range (0, 1) for increased numerical stability.
     data::MinMaxScaler scale;
@@ -215,6 +224,15 @@ int main()
     CreateTimeSeriesData(trainData, trainX, trainY, rho);
     // Create test sets for one-step-ahead regression.
     CreateTimeSeriesData(testData, testX, testY, rho);
+
+    trainData.save("trainData.csv", arma::csv_ascii);
+    testData.save("testData.csv", arma::csv_ascii);
+
+    trainX.save("trainX.txt", arma::arma_ascii);
+    trainX.save("trainY.txt", arma::arma_ascii);
+    testX.save("testX.txt", arma::arma_ascii);
+    testX.save("testY.txt", arma::arma_ascii);
+
 
     // Only train the model if required.
     if (bTrain || bLoadAndTrain)
