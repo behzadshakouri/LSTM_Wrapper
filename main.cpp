@@ -32,10 +32,12 @@ date  close  volume  open  high  low
 */
 
 #include <QDebug>
+#include "lstmtimeseriesset.h"
 
 
 #define MLPACK_ENABLE_ANN_SERIALIZATION
-#include <mlpack.hpp>
+//#include <mlpack.hpp>
+#include <pch.h>
 
 using namespace std;
 using namespace mlpack;
@@ -89,9 +91,9 @@ void CreateTimeSeriesData(InputDataType dataset,
 void SaveResults(const string filename,
                  const arma::cube& predictions,
                  data::MinMaxScaler& scale,
-                 const arma::cube& testX)
+                 const arma::cube& testIO)
 {
-    arma::mat flatDataAndPreds = testX.slice(testX.n_slices - 1);
+    LSTMTimeSeriesSet flatDataAndPreds = testIO.slice(testIO.n_slices - 1);
     scale.InverseTransform(flatDataAndPreds, flatDataAndPreds);
 
     // The prediction results are the (high, low) for the next day and come from
@@ -102,7 +104,7 @@ void SaveResults(const string filename,
     // structure used to transform the data. This is needed in order to be able
     // to use the right scaling parameters for the specific column stock
     // (high, low).
-    temp.insert_rows(0, 3, 0);
+    temp.insert_rows(0, 9, 0); // temp.insert_rows(0, 3, 0); // inputsize = 9 for ASM
     scale.InverseTransform(temp, temp);
 
     // We shift the predictions such that the true values are synchronized with
@@ -177,7 +179,7 @@ int main()
     // Number of timesteps to look backward for in the RNN.
     const int rho = 25;
 
-    arma::mat dataset;
+    LSTMTimeSeriesSet dataset;
 
     // In Armadillo rows represent features, columns represent data points.
     cout << "Reading data ..." << endl;
@@ -191,7 +193,7 @@ int main()
     dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1); //Elimiate the first column
 
     // We have 5 input data columns and 2 output columns (target).
-    size_t inputSize = 9, outputSize = 2; //5,2
+    size_t inputSize = 9, outputSize = 2, IOSize = inputSize + outputSize; //5,2
 
     // Split the dataset into training and validation sets.
     arma::mat trainData;
@@ -202,7 +204,7 @@ int main()
     testData.save("testData_bs.csv", arma::csv_ascii);
 
     // Number of epochs for training.
-    const int EPOCHS = 150; // 150
+    const int EPOCHS = 1; // 150
 
     // Scale all data into the range (0, 1) for increased numerical stability.
     data::MinMaxScaler scale;
@@ -232,7 +234,6 @@ int main()
     trainX.save("trainY.txt", arma::arma_ascii);
     testX.save("testX.txt", arma::arma_ascii);
     testX.save("testY.txt", arma::arma_ascii);
-
 
     // Only train the model if required.
     if (bTrain || bLoadAndTrain)
@@ -321,9 +322,23 @@ int main()
     double trainMSEP = ComputeMSE(predOutP_Train, trainY);
     cout << "Mean Squared Error on Prediction data points for train Data:= " << trainMSEP << endl;
 
-    // Save the output predictions and show the results.
-    SaveResults(predFile_Test, predOutP_Test, scale, testX);
-    SaveResults(predFile_Train, predOutP_Train, scale, trainX);
+    // Save the output predictions and show the results.    
+    arma::cube trainIO, testIO;
+
+    //trainIO.set_size(IOSize, trainData.n_cols - rho, rho);
+    //testIO.set_size(IOSize, testData.n_cols - rho, rho);
+
+    testIO = testX;
+    testIO.insert_rows(testX.n_rows,testY);
+
+    trainIO = trainX;
+    trainIO.insert_rows(trainX.n_rows,trainY);
+
+    testIO.save("testIO.txt", arma::arma_ascii);
+    trainIO.save("trainIO.txt", arma::arma_ascii);
+
+    SaveResults(predFile_Test, predOutP_Test, scale, testIO);
+    SaveResults(predFile_Train, predOutP_Train, scale, trainIO);
 
     // Use this on Windows in order to keep the console window open.
     // cout << "Ready!" << endl;
