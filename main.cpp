@@ -120,19 +120,16 @@ void SaveResults(const string filename,
 
     // We add the prediction as the last two columns (stock high, low).
 
-    flatDataAndPreds.insert_rows(flatDataAndPreds.n_rows, temp.rows(temp.n_rows - 2, temp.n_rows - 1));
+    flatDataAndPreds.insert_rows(flatDataAndPreds.n_rows, temp.rows(temp.n_rows - 1, temp.n_rows - 1)); //-2,-1
 
     // Save the data to file. The last columns are the predictions; the preceding
     // columns are the data used to generate those predictions.
     data::Save(filename, flatDataAndPreds);
 
     // Print the output to screen.
-    cout << "The predicted Google stock (high, low) for the last day is: "
-         << endl;
-    cout << "  (" << flatDataAndPreds(flatDataAndPreds.n_rows - 2,
-                                      flatDataAndPreds.n_cols - 1) << " ,";
-    cout << flatDataAndPreds(flatDataAndPreds.n_rows - 1,
-                             flatDataAndPreds.n_cols - 1) << ")" << endl;
+    cout << "The predicted output for the last day is: " << endl;
+    cout << "  (" << flatDataAndPreds(flatDataAndPreds.n_rows - 1, flatDataAndPreds.n_cols - 1) << " ,"; // flatDataAndPreds(flatDataAndPreds.n_rows - 2, flatDataAndPreds.n_cols - 1
+    //cout << flatDataAndPreds(flatDataAndPreds.n_rows - 1, flatDataAndPreds.n_cols - 1) << ")" << endl;
 }
 
 int main()

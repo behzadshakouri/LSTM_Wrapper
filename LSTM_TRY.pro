@@ -3,12 +3,12 @@ CONFIG += console c++17
 CONFIG -= app_bundle
 CONFIG += core
 
-#CONFIG+= precompile_header
-#PRECOMPILED_HEADER = pch.h
+CONFIG+= precompile_header
+PRECOMPILED_HEADER = pch.h
 
-#precompile_header:!isEmpty(PRECOMPILED_HEADER) {
-#DEFINES += USING_PCH
-#}
+precompile_header:!isEmpty(PRECOMPILED_HEADER) {
+DEFINES += USING_PCH
+}
 
 
 DEFINES += GSL
