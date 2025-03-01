@@ -1,6 +1,6 @@
 /**
  * An example of using Recurrent Neural Network (RNN)
- * to make forecasts on a time series of Google stock prices.
+ * to make forecasts on a time series of ASM.
  * which we aim to solve using a simple LSTM neural network.
  *
  * mlpack is free software; you may redistribute it and/or modify it under the
@@ -11,23 +11,16 @@
  * @file LSTMTimeSeriesMultivariate.cpp
  * @author Mehul Kumar Nirala.
  * @author Zoltan Somogyi
+ * Modified by Behzad Shakouri & Arash Massoudieh
  */
 
 /*
 NOTE: the data need to be sorted by date in ascending order! The RNN learns from
 oldest to newest!
 
-date  close  volume  open  high  low
-27-06-16  668.26  2632011  671  672.3  663.284
-28-06-16  680.04  2169704  678.97  680.33  673
-29-06-16  684.11  1931436  683  687.4292  681.41
-30-06-16  692.1  1597298  685.47  692.32  683.65
-01-07-16  699.21  1344387  692.2  700.65  692.1301
-05-07-16  694.49  1462879  696.06  696.94  688.88
-06-07-16  697.77  1411080  689.98  701.68  689.09
-07-07-16  695.36  1303661  698.08  698.2  688.215
-08-07-16  705.63  1573909  699.5  705.71  696.435
-11-07-16  715.09  1107039  708.05  716.51  707.24
+Date  Inputs Outputs
+27-06-16  ... ...
+28-06-16  ... ...
 ...
 */
 
@@ -52,11 +45,6 @@ double ComputeMSE(arma::cube& pred, arma::cube& Y)
 }
 
 /**
- * The time series data for training the model contains the Closing stock price,
- * the volume of stocks traded, opening stock price, highest stock price and
- * lowest stock price for 'rho' days in the past. The two target variables
- * (multivariate) we want to predict are the highest stock price and lowest
- * stock price (high, low) for the next day.
  *
  * NOTE: We do not use the last input data point in the training because there
  * is no target (next day (high, low)) for that point.
@@ -67,21 +55,36 @@ template<typename InputDataType = arma::mat,
 void CreateTimeSeriesData(InputDataType dataset,
                           DataType& X,
                           LabelType& y,
-                          const size_t rho)
+                          const size_t rho,
+                          const int inputsize,
+                          const int outputsize,
+                          const bool ASM)
 {
-    for (size_t i = 0; i < dataset.n_cols - rho; i++)
-    {
-        double inputsize = 9; // Edit spans before run
-        double outputsize = dataset.n_rows-inputsize;
-        //arma::cube LHS = X.subcube(arma::span(), arma::span(i), arma::span());
-        //qDebug()<<LHS.n_rows<<","<<LHS.n_cols<<","<<LHS.n_slices;
-        //arma::mat RHS = dataset.submat(arma::span(0), arma::span(i, i + rho - 1));
-        //qDebug()<<RHS.n_rows<<","<<RHS.n_cols;
-        X.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(0,inputsize-1), arma::span(i, i + rho - 1)); //col 0 input
-        y.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(inputsize), arma::span(i + 1, i + rho)); //col 1 output , dataset.submat(arma::span(3, 4), arma::span(i + 1, i + rho)), dataset.submat(arma::span(9, 10), arma::span(i + 1, i + rho))
+    if (ASM) {
+        for (size_t i = 0; i < dataset.n_cols - rho; i++)
+            {
+            //arma::cube LHS = X.subcube(arma::span(), arma::span(i), arma::span());
+            //qDebug()<<LHS.n_rows<<","<<LHS.n_cols<<","<<LHS.n_slices;
+            //arma::mat RHS = dataset.submat(arma::span(0), arma::span(i, i + rho - 1));
+            //qDebug()<<RHS.n_rows<<","<<RHS.n_cols;
+            X.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(0, inputsize - 1), arma::span(i, i + rho - 1)); //col 0 input
+            if (outputsize==1)
+            y.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(inputsize + outputsize - 1), arma::span(i + 1, i + rho)); //col 1 output , dataset.submat(arma::span(3, 4), arma::span(i + 1, i + rho)), dataset.submat(arma::span(9, 10), arma::span(i + 1, i + rho))
+            if (outputsize>1)
+            y.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(inputsize, inputsize + outputsize - 1), arma::span(i + 1, i + rho)); //col 1 output , dataset.submat(arma::span(3, 4), arma::span(i + 1, i + rho)), dataset.submat(arma::span(9, 10), arma::span(i + 1, i + rho))
+            }
+    }
+    else if (!ASM) {
+        for (size_t i = 0; i < dataset.n_cols - rho; i++)
+        {
+            X.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(0, inputsize - 1), arma::span(i, i + rho - 1)); //col 0 input
+            if (outputsize==1)
+            y.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(inputsize - outputsize), arma::span(i + 1, i + rho)); //col 1 output , dataset.submat(arma::span(3, 4), arma::span(i + 1, i + rho)), dataset.submat(arma::span(9, 10), arma::span(i + 1, i + rho))
+            if (outputsize>1)
+            y.subcube(arma::span(), arma::span(i), arma::span()) = dataset.submat(arma::span(inputsize - outputsize, inputsize - 1), arma::span(i + 1, i + rho)); //col 1 output , dataset.submat(arma::span(3, 4), arma::span(i + 1, i + rho)), dataset.submat(arma::span(9, 10), arma::span(i + 1, i + rho))
+        }
     }
 }
-
 
 /**
  * This function saves the input data for prediction and the prediction results
@@ -93,11 +96,12 @@ void CreateTimeSeriesData(InputDataType dataset,
 void SaveResults(const string filename,
                  const arma::cube& predictions,
                  data::MinMaxScaler& scale,
-                 const arma::cube& testIO)
+                 const arma::cube& IOData,
+                 const int inputsize,
+                 const int outputsize,
+                 const bool ASM)
 {
-    double inputsize = 9; // double check before run
-
-    LSTMTimeSeriesSet flatDataAndPreds = testIO.slice(testIO.n_slices - 1);
+    arma::mat flatDataAndPreds = IOData.slice(IOData.n_slices - 1);
     scale.InverseTransform(flatDataAndPreds, flatDataAndPreds);
 
     // The prediction results are the (high, low) for the next day and come from
@@ -108,7 +112,11 @@ void SaveResults(const string filename,
     // structure used to transform the data. This is needed in order to be able
     // to use the right scaling parameters for the specific column stock
     // (high, low).
-    temp.insert_rows(0, inputsize, 0); // temp.insert_rows(0, 3, 0); // inputsize = 9 for ASM
+    if (ASM)
+        temp.insert_rows(0, inputsize, 0); // temp.insert_rows(0, 3, 0); // inputsize = 9 for ASM
+    else if (!ASM)
+        temp.insert_rows(0, inputsize - outputsize, 0); // temp.insert_rows(0, 3, 0); // inputsize = 9 for ASM
+
     scale.InverseTransform(temp, temp);
 
     // We shift the predictions such that the true values are synchronized with
@@ -118,26 +126,48 @@ void SaveResults(const string filename,
     temp.insert_cols(0, 1, true);
     flatDataAndPreds.insert_cols(flatDataAndPreds.n_cols, 1, true);
 
-    // We add the prediction as the last two columns (stock high, low).
+    // We add the prediction as the last columns.
 
-    flatDataAndPreds.insert_rows(flatDataAndPreds.n_rows, temp.rows(temp.n_rows - 1, temp.n_rows - 1)); //-2,-1
+    flatDataAndPreds.insert_rows(flatDataAndPreds.n_rows, temp.rows(temp.n_rows - outputsize, temp.n_rows - 1));
 
     // Save the data to file. The last columns are the predictions; the preceding
     // columns are the data used to generate those predictions.
     data::Save(filename, flatDataAndPreds);
 
     // Print the output to screen.
-    cout << "The predicted output for the last day is: " << endl;
-    cout << "  (" << flatDataAndPreds(flatDataAndPreds.n_rows - 1, flatDataAndPreds.n_cols - 1) << " ,"; // flatDataAndPreds(flatDataAndPreds.n_rows - 2, flatDataAndPreds.n_cols - 1
-    //cout << flatDataAndPreds(flatDataAndPreds.n_rows - 1, flatDataAndPreds.n_cols - 1) << ")" << endl;
+    cout << "The predicted output (last one) is: " << endl;
+    for (int i=1; i<outputsize; i++)
+        cout << " (" << flatDataAndPreds(flatDataAndPreds.n_rows - i, flatDataAndPreds.n_cols - 1) << ")" << endl;
+
 }
 
 int main()
 {
+
+    bool ASM = 0;
+
+    bool IO = 1; // IO = 0 if Targets (Outputs) will NOT be considered as Inputs (ASM), IO = 1 if Targets (Outputs) will be considered as Inputs (Stock Market).
+
+    if (ASM)
+        IO = 0;
+
+    // We have 9 input data columns and 2 output columns (target).
+    size_t inputSize = 9, outputSize = 1; // ASM
+
+    // We have 5 input data columns and 2 output columns (target).
+    if (!ASM)
+        inputSize = 5, outputSize = 2; // Stock market : 5,2
+
     // Change the names of these files as necessary. They should be correct
     // already, if your program's working directory contains the data and/or
     // model.
-    const string dataFile = "/home/behzad/Projects/LSTM_TRY/ASM_NH.txt";
+    string dataFile;
+
+    if (ASM)
+        dataFile = "/home/behzad/Projects/LSTM_TRY/ASM_NO.txt";
+    else if (!ASM)
+        dataFile = "/home/behzad/Projects/LSTM_TRY/Google2016-2019.csv";
+
     // example: const string dataFile =
     //              "C:/mlpack-model-app/Google2016-2019.csv";
     // example: const string dataFile =
@@ -168,19 +198,22 @@ int main()
     // Step size of an optimizer.
     const double STEP_SIZE = 5e-5;
 
+    // Number of epochs for training.
+    const int EPOCHS = 10; // 150
+
     // Number of cells in the LSTM (hidden layers in standard terms).
     // NOTE: you may play with this variable in order to further optimize the
     // model (as more cells are added, accuracy is likely to go up, but training
     // time may take longer).
-    const int H1 = 25;
+    const int H1 = 15; //15
 
     // Number of data points in each iteration of SGD.
     const size_t BATCH_SIZE = 16;
 
     // Number of timesteps to look backward for in the RNN.
-    const int rho = 25;
+    const int rho = 25; //25
 
-    LSTMTimeSeriesSet dataset;
+    arma::mat dataset;
 
     // In Armadillo rows represent features, columns represent data points.
     cout << "Reading data ..." << endl;
@@ -191,10 +224,7 @@ int main()
     // The first column in the CSV is the date which is not required, therefore
     // we remove it also (first row in in arma::mat).
 
-    dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1); //Elimiate the first column
-
-    // We have 5 input data columns and 2 output columns (target).
-    size_t inputSize = 9, outputSize = dataset.n_rows-inputSize, IOSize = inputSize + outputSize; //5,2
+    dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1); // Eliminate the first column
 
     // Split the dataset into training and validation sets.
     arma::mat trainData;
@@ -203,9 +233,6 @@ int main()
 
     trainData.save("trainData_bs.csv", arma::csv_ascii);
     testData.save("testData_bs.csv", arma::csv_ascii);
-
-    // Number of epochs for training.
-    const int EPOCHS = 150; // 150
 
     // Scale all data into the range (0, 1) for increased numerical stability.
     data::MinMaxScaler scale;
@@ -224,9 +251,9 @@ int main()
     testY.set_size(outputSize, testData.n_cols - rho, rho);
 
     // Create training sets for one-step-ahead regression.
-    CreateTimeSeriesData(trainData, trainX, trainY, rho);
+    CreateTimeSeriesData(trainData, trainX, trainY, rho, inputSize, outputSize, ASM);
     // Create test sets for one-step-ahead regression.
-    CreateTimeSeriesData(testData, testX, testY, rho);
+    CreateTimeSeriesData(testData, testX, testY, rho, inputSize, outputSize, ASM);
 
     trainData.save("trainData.csv", arma::csv_ascii);
     testData.save("testData.csv", arma::csv_ascii);
@@ -318,28 +345,30 @@ int main()
     modelP.Predict(trainX, predOutP_Train);
     // Calculate MSE on prediction.
     double testMSEP = ComputeMSE(predOutP_Test, testY);
-    cout << "Mean Squared Error on Prediction data points for test Data:= " << testMSEP << endl;
+    cout << "Mean Squared Error on Prediction data points for test Data= " << testMSEP << endl;
 
     double trainMSEP = ComputeMSE(predOutP_Train, trainY);
-    cout << "Mean Squared Error on Prediction data points for train Data:= " << trainMSEP << endl;
+    cout << "Mean Squared Error on Prediction data points for train Data= " << trainMSEP << endl;
 
     // Save the output predictions and show the results.    
     arma::cube trainIO, testIO;
 
-    //trainIO.set_size(IOSize, trainData.n_cols - rho, rho);
-    //testIO.set_size(IOSize, testData.n_cols - rho, rho);
-
     testIO = testX;
-    testIO.insert_rows(testX.n_rows,testY);
+    if (!IO)
+    testIO.insert_rows(testX.n_rows, testY);
 
     trainIO = trainX;
-    trainIO.insert_rows(trainX.n_rows,trainY);
+    if (!IO)
+    trainIO.insert_rows(trainX.n_rows, trainY);
 
     testIO.save("testIO.txt", arma::arma_ascii);
     trainIO.save("trainIO.txt", arma::arma_ascii);
 
-    SaveResults(predFile_Test, predOutP_Test, scale, testIO);
-    SaveResults(predFile_Train, predOutP_Train, scale, trainIO);
+    cout << "test Data:" << endl;
+    SaveResults(predFile_Test, predOutP_Test, scale, testIO, inputSize, outputSize, ASM);
+    cout << "train Data:" << endl;
+    SaveResults(predFile_Train, predOutP_Train, scale, trainIO, inputSize, outputSize, ASM);
+
 
     // Use this on Windows in order to keep the console window open.
     // cout << "Ready!" << endl;
