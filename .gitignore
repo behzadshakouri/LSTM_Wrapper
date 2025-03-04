@@ -2,3 +2,7 @@
 build/Desktop_Qt_5_15_2_GCC_64bit-Debug/
 
 .~lock.Google2016-2019.csv#
+
+Example/
+
+.qtcreator/project.json
