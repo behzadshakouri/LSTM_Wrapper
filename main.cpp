@@ -144,13 +144,13 @@ int main()
 
     bool ASM = 1;
 
-    bool IO = 1; // IO = 0 if Targets (Outputs) will NOT be considered as Inputs (ASM), IO = 1 if Targets (Outputs) will be considered as Inputs (Stock Market).
+    bool IO = 0; // IO = 0 if Targets (Outputs) will NOT be considered as Inputs (ASM), IO = 1 if Targets (Outputs) will be considered as Inputs (Stock Market).
 
     if (ASM)
         IO = 0;
 
     // We have 9 input data columns and 1/2/3/... output columns (targets).
-    size_t inputSize = 9, outputSize = 1; // ASM
+    size_t inputSize = 9, outputSize = 2; // ASM
 
     // We have 5 input data columns and 2 output columns (target).
     if (!ASM)
@@ -162,7 +162,7 @@ int main()
     string dataFile;
 
     if (ASM)
-        dataFile = "/home/behzad/Projects/LSTM_TRY/ASM_NO.txt";
+        dataFile = "/home/behzad/Projects/LSTM_TRY/ASM_NO_NH.txt";
     else if (!ASM)
         dataFile = "/home/behzad/Projects/LSTM_TRY/Google2016-2019.csv";
 
@@ -197,7 +197,7 @@ int main()
     const double STEP_SIZE = 5e-5;
 
     // Number of epochs for training.
-    const int EPOCHS = 150; // 150
+    const int EPOCHS = 300; // 150
 
     // Number of cells in the LSTM (hidden layers in standard terms).
     // NOTE: you may play with this variable in order to further optimize the
@@ -209,7 +209,7 @@ int main()
     const size_t BATCH_SIZE = 16;
 
     // Number of timesteps to look backward for in the RNN.
-    const int rho = 25; //25
+    const int rho = 5; //25
 
     arma::mat dataset;
 
@@ -277,13 +277,16 @@ int main()
         {
             // Model building.
             model.Add<LSTM>(H1);
-            model.Add<Dropout>(0.5);
-            model.Add<LeakyReLU>();
+            //model.Add<Dropout>(0.5);
+            //.Add<LeakyReLU>();
+            model.Add<Sigmoid>();
             model.Add<LSTM>(H1);
-            model.Add<Dropout>(0.5);
-            model.Add<LeakyReLU>();
+            //model.Add<Dropout>(0.5);
+            //model.Add<LeakyReLU>();
+            //model.Add<Sigmoid>();
             model.Add<LSTM>(H1);
-            model.Add<LeakyReLU>();
+            //model.Add<LeakyReLU>();
+            model.Add<Sigmoid>();
             model.Add<Linear>(outputSize);
         }
 
