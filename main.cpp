@@ -278,12 +278,12 @@ int main()
             // Model building.
             model.Add<LSTM>(H1);
             //model.Add<Dropout>(0.5);
-            //.Add<LeakyReLU>();
+            //model.Add<LeakyReLU>();
             model.Add<Sigmoid>();
             model.Add<LSTM>(H1);
             //model.Add<Dropout>(0.5);
             //model.Add<LeakyReLU>();
-            //model.Add<Sigmoid>();
+            model.Add<Sigmoid>();
             model.Add<LSTM>(H1);
             //model.Add<LeakyReLU>();
             model.Add<Sigmoid>();
