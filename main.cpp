@@ -101,7 +101,7 @@ void SaveResults(const string filename,
     // The prediction results are the (high, low) for the next day and come from
     // the last slice from the prediction.
     arma::mat temp = predictions.slice(predictions.n_slices - 1);
-    temp.save("temp.txt", arma::arma_ascii);
+    temp.save("/home/behzad/Projects/LSTM_TRY/Results/temp.txt", arma::arma_ascii);
 
     // NOTE: We add 3 extra rows here in order to recreate the input data
     // structure used to transform the data. This is needed in order to be able
@@ -162,7 +162,7 @@ int main()
     string dataFile;
 
     if (ASM)
-        dataFile = "/home/behzad/Projects/LSTM_TRY/observedoutput_t8_NO.txt";
+        dataFile = "/home/behzad/Projects/LSTM_TRY/observedoutput_t10_NO.txt";
     else if (!ASM)
         dataFile = "/home/behzad/Projects/LSTM_TRY/Google2016-2019.csv";
 
@@ -171,14 +171,14 @@ int main()
     // example: const string dataFile =
     //              "/home/user/mlpack-model-app/Google2016-2019.csv";
 
-    const string modelFile = "lstm_multi.bin";
+    const string modelFile = "/home/behzad/Projects/LSTM_TRY/Results/lstm_multi.bin";
     // example: const string modelFile =
     //              "C:/mlpack-model-app/lstm_multi.bin";
     // example: const string modelFile =
     //              "/home/user/mlpack-model-app/lstm_multi.bin";
 
-    const string predFile_Test = "lstm_multi_predictions_test.csv";
-    const string predFile_Train = "lstm_multi_predictions_train.csv";
+    const string predFile_Test = "/home/behzad/Projects/LSTM_TRY/Results/lstm_multi_predictions_test.csv";
+    const string predFile_Train = "/home/behzad/Projects/LSTM_TRY/Results/lstm_multi_predictions_train.csv";
 
     // If true, the model will be trained; if false, the saved model will be
     // read and used for prediction
@@ -191,13 +191,13 @@ int main()
     const bool bLoadAndTrain = false;
 
     // Testing data is taken from the dataset in this ratio.
-    const double RATIO = 0.1; //0.1
+    const double RATIO = 0.3; //0.1
 
     // Step size of an optimizer.
     const double STEP_SIZE = 5e-5;
 
     // Number of epochs for training.
-    const int EPOCHS = 1000; // 150
+    const int EPOCHS = 300; // 150
 
     // Number of cells in the LSTM (hidden layers in standard terms).
     // NOTE: you may play with this variable in order to further optimize the
@@ -229,8 +229,8 @@ int main()
     arma::mat testData;
     data::Split(dataset, trainData, testData, RATIO, false);
 
-    trainData.save("trainData_bs.csv", arma::csv_ascii);
-    testData.save("testData_bs.csv", arma::csv_ascii);
+    trainData.save("/home/behzad/Projects/LSTM_TRY/Results/trainData_bs.csv", arma::csv_ascii);
+    testData.save("/home/behzad/Projects/LSTM_TRY/Results/testData_bs.csv", arma::csv_ascii);
 
     // Scale all data into the range (0, 1) for increased numerical stability.
     data::MinMaxScaler scale;
@@ -253,13 +253,13 @@ int main()
     // Create test sets for one-step-ahead regression.
     CreateTimeSeriesData(testData, testX, testY, rho, inputSize, outputSize, IO);
 
-    trainData.save("trainData.csv", arma::csv_ascii);
-    testData.save("testData.csv", arma::csv_ascii);
+    trainData.save("/home/behzad/Projects/LSTM_TRY/Results/trainData.csv", arma::csv_ascii);
+    testData.save("/home/behzad/Projects/LSTM_TRY/Results/testData.csv", arma::csv_ascii);
 
-    trainX.save("trainX.txt", arma::arma_ascii);
-    trainX.save("trainY.txt", arma::arma_ascii);
-    testX.save("testX.txt", arma::arma_ascii);
-    testX.save("testY.txt", arma::arma_ascii);
+    trainX.save("/home/behzad/Projects/LSTM_TRY/Results/trainX.txt", arma::arma_ascii);
+    trainX.save("/home/behzad/Projects/LSTM_TRY/Results/trainY.txt", arma::arma_ascii);
+    testX.save("/home/behzad/Projects/LSTM_TRY/Results/testX.txt", arma::arma_ascii);
+    testX.save("/home/behzad/Projects/LSTM_TRY/Results/testY.txt", arma::arma_ascii);
 
     // Only train the model if required.
     if (bTrain || bLoadAndTrain)
@@ -345,8 +345,8 @@ int main()
     modelP.Predict(testX, predOutP_Test);
     modelP.Predict(trainX, predOutP_Train);
 
-    predOutP_Test.save("predOutP_Test.txt", arma::arma_ascii);
-    predOutP_Train.save("predOutP_Train.txt", arma::arma_ascii);
+    predOutP_Test.save("/home/behzad/Projects/LSTM_TRY/Results/predOutP_Test.txt", arma::arma_ascii);
+    predOutP_Train.save("/home/behzad/Projects/LSTM_TRY/Results/predOutP_Train.txt", arma::arma_ascii);
 
     // Calculate MSE on prediction.
     double testMSEP = ComputeMSE(predOutP_Test, testY);
