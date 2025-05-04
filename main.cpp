@@ -197,15 +197,15 @@ int main()
     const double STEP_SIZE = 5e-5;
 
     // Number of epochs for training.
-    const int EPOCHS = 300; // 150
+    const int EPOCHS = 1000; // 150
 
     // Number of cells in the LSTM (hidden layers in standard terms).
     // NOTE: you may play with this variable in order to further optimize the
     // model (as more cells are added, accuracy is likely to go up, but training
     // time may take longer).
-    const int H1 = 10; //15
-    const int H2 = 8; //15
-    const int H3 = 7; //15
+    const int H1 = 10*2; //15
+    const int H2 = 8*2; //15
+    const int H3 = 7*2; //15
 
     // Number of data points in each iteration of SGD.
     const size_t BATCH_SIZE = 16;
@@ -278,15 +278,13 @@ int main()
         else
         {
             // Model building.
+            model.Add<Linear>(inputSize);
             model.Add<LSTM>(H1);
-            //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>();
-            //model.Add<Sigmoid>();
+            //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>(); //model.Add<Sigmoid>();
             model.Add<LSTM>(H2);
-            //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>();
-            //model.Add<Sigmoid>();
+            //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>(); //model.Add<Sigmoid>();
             model.Add<LSTM>(H3);
-            //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>();
-            //model.Add<Sigmoid>();
+            //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>(); //model.Add<Sigmoid>();
             model.Add<Linear>(outputSize);
         }
 
