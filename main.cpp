@@ -279,11 +279,13 @@ int main()
         {
             // Model building.
             model.Add<Linear>(inputSize);
+            //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>(); //model.Add<Sigmoid>();
             model.Add<LSTM>(H1);
             //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>(); //model.Add<Sigmoid>();
             model.Add<LSTM>(H2);
             //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>(); //model.Add<Sigmoid>();
             model.Add<LSTM>(H3);
+            model.Add<ReLU>();
             //model.Add<Dropout>(0.1); //model.Add<LeakyReLU>(); //model.Add<ReLU>(); //model.Add<PReLU>(); //model.Add<Sigmoid>();
             model.Add<Linear>(outputSize);
         }
