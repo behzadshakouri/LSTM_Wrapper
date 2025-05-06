@@ -191,7 +191,7 @@ int main()
     const bool bLoadAndTrain = false;
 
     // Testing data is taken from the dataset in this ratio.
-    const double RATIO = 0.3; //0.1
+    const double RATIO = 0.5; //0.1
 
     // Step size of an optimizer.
     const double STEP_SIZE = 5e-5;
