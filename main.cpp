@@ -162,7 +162,7 @@ int main()
     string dataFile;
 
     if (ASM)
-        dataFile = "/home/behzad/Projects/LSTM_TRY/observedoutput_t11_sCOD.txt";
+        dataFile = "/home/behzad/Projects/LSTM_TRY/observedoutput_t10&11_sCOD.txt";
     else if (!ASM)
         dataFile = "/home/behzad/Projects/LSTM_TRY/Google2016-2019.csv";
 
