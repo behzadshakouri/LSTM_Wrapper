@@ -160,9 +160,10 @@ int main()
     // already, if your program's working directory contains the data and/or
     // model.
     string dataFile;
+    string data_name = "sCOD"; // NO, NH, ND, sCOD, VSS, TKN
 
     if (ASM)
-        dataFile = "/home/behzad/Projects/LSTM_TRY/observedoutput_t10&11_sCOD.txt";
+        dataFile = "/home/behzad/Projects/LSTM_TRY/observedoutput_t10&11_" + data_name + +".txt";
     else if (!ASM)
         dataFile = "/home/behzad/Projects/LSTM_TRY/Google2016-2019.csv";
 
