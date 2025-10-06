@@ -44,6 +44,52 @@ double ComputeMSE(arma::cube& pred, arma::cube& Y)
     return metric::SquaredEuclideanDistance::Evaluate(pred, Y) / (Y.n_elem);
 }
 
+bool TrainWithKFold(mlpack::ann::RNN<MeanSquaredError, mlpack::ann::RandomInitialization>& model,
+                    arma::mat& trainX,
+                    arma::mat& trainY,
+                    ens::Adam& optimizer,
+                    int nFolds = 1);
+
+
+std::pair<std::pair<arma::mat, arma::mat>, std::pair<arma::mat, arma::mat>>
+KFoldSplit(const arma::mat& data,
+           const arma::mat& labels,
+           size_t k,
+           size_t fold)
+{
+    // Safety checks
+    if (k == 0 || fold >= k)
+        throw std::invalid_argument("fold index must be in [0, k-1] and k > 0");
+
+    size_t nSamples = data.n_cols;
+    size_t foldSize = nSamples / k;
+
+    size_t start = fold * foldSize;
+    size_t end = (fold == k - 1) ? nSamples : start + foldSize;
+
+    // Validation indices: [start, end)
+    arma::uvec validIndices = arma::regspace<arma::uvec>(start, end - 1);
+
+    // Training indices: all others
+    arma::uvec allIndices = arma::regspace<arma::uvec>(0, nSamples - 1);
+    arma::uvec trainIndices = arma::find(arma::ones<arma::uvec>(nSamples) - arma::conv_to<arma::uvec>::from(allIndices == validIndices(0)));
+
+    // Simpler: remove validation indices from all indices
+    arma::uvec mask = arma::ones<arma::uvec>(nSamples);
+    mask(validIndices).zeros();
+    arma::uvec trainIdx = arma::find(mask == 1);
+
+    // Subset data and labels
+    arma::mat trainData = data.cols(trainIdx);
+    arma::mat trainLabels = labels.cols(trainIdx);
+    arma::mat validData = data.cols(validIndices);
+    arma::mat validLabels = labels.cols(validIndices);
+
+    // Return as ((trainData, trainLabels), (validData, validLabels))
+    return {{trainData, trainLabels}, {validData, validLabels}};
+}
+
+
 /**
  *
  * NOTE: We do not use the last input data point in the training because there
@@ -379,4 +425,125 @@ int main()
     // Use this on Windows in order to keep the console window open.
     // cout << "Ready!" << endl;
     // getchar();
+}
+
+
+
+/**
+ * @brief Train an RNN (e.g., LSTM) model using either single-pass or k-fold cross-validation.
+ *
+ * @param model     RNN model (e.g., RNN<MeanSquaredError, HeInitialization>).
+ * @param trainX    Input features (each column is a sequence sample).
+ * @param trainY    Target outputs.
+ * @param optimizer Configured optimizer (e.g., ens::Adam).
+ * @param nFolds    Number of folds for k-fold CV. If <= 1, performs normal training.
+ *
+ * @return true if training completes successfully.
+ */
+bool TrainWithKFold(mlpack::ann::RNN<MeanSquaredError, mlpack::ann::HeInitialization>& model,
+                    arma::mat& trainX,
+                    arma::mat& trainY,
+                    ens::Adam& optimizer,
+                    int nFolds)
+{
+    mlpack::math::RandomSeed(1234);
+
+    // -------------------------------------------------------------
+    //  Regular training (no cross-validation)
+    // -------------------------------------------------------------
+    if (nFolds <= 1)
+    {
+        std::cout << "Performing regular training..." << std::endl;
+
+        model.Train(trainX,
+                    trainY,
+                    optimizer,
+                    // PrintLoss Callback prints loss for each epoch.
+                    ens::PrintLoss(),
+                    // Progressbar Callback prints progress bar for each epoch.
+                    ens::ProgressBar(),
+                    // Stops the optimization process if the loss stops decreasing
+                    // or no improvement has been made. This will terminate the
+                    // optimization once we obtain a minima on training set.
+                    ens::EarlyStopAtMinLoss());
+
+        return true;
+    }
+
+    // -------------------------------------------------------------
+    //  K-Fold Cross-Validation
+    // -------------------------------------------------------------
+    std::cout << "Performing " << nFolds << "-fold cross-validation..." << std::endl;
+
+    const size_t nSamples = trainX.n_cols;
+    arma::arma_rng::set_seed_random();
+
+    // Shuffle before splitting into folds
+    arma::uvec indices = arma::randperm(nSamples);
+    arma::mat shuffledX = trainX.cols(indices);
+    arma::mat shuffledY = trainY.cols(indices);
+
+    mlpack::metric::MeanSquaredError mseMetric;
+    double totalValLoss = 0.0;
+
+    for (int fold = 0; fold < nFolds; ++fold)
+    {
+        // Define fold ranges
+        const size_t foldSize = nSamples / nFolds;
+        const size_t start = fold * foldSize;
+        const size_t end = (fold == nFolds - 1) ? nSamples : start + foldSize;
+
+        arma::uvec valIdx = arma::regspace<arma::uvec>(start, end - 1);
+        arma::uvec mask(nSamples, arma::fill::ones);
+        mask(valIdx).zeros();
+        arma::uvec trainIdx = arma::find(mask == 1);
+
+        // Split training and validation data
+        arma::mat Xtrain = shuffledX.cols(trainIdx);
+        arma::mat Ytrain = shuffledY.cols(trainIdx);
+        arma::mat Xval   = shuffledX.cols(valIdx);
+        arma::mat Yval   = shuffledY.cols(valIdx);
+
+        std::cout << "\nFold " << (fold + 1) << " / " << nFolds
+                  << " | Training samples: " << Xtrain.n_cols
+                  << " | Validation samples: " << Xval.n_cols << std::endl;
+
+        // ✅ Reset RNN weights and internal states before each fold
+        model.Reset();
+
+        // Train this fold
+        model.Train(Xtrain,
+                    Ytrain,
+                    optimizer,
+                    ens::PrintLoss(),
+                    ens::ProgressBar(),
+                    ens::EarlyStopAtMinLoss());
+
+        // Evaluate on validation set
+        arma::mat preds;
+        model.Predict(Xval, preds);
+        double valMSE = mseMetric.Evaluate(preds, Yval);
+
+        totalValLoss += valMSE;
+        std::cout << "  Validation MSE: " << valMSE << std::endl;
+    }
+
+    const double avgValLoss = totalValLoss / nFolds;
+    std::cout << "\nAverage validation MSE across " << nFolds
+              << " folds: " << avgValLoss << std::endl;
+
+    // -------------------------------------------------------------
+    //  Retrain final model on full dataset
+    // -------------------------------------------------------------
+    std::cout << "\nRetraining final model on all data..." << std::endl;
+    model.Reset();
+    model.Train(trainX,
+                trainY,
+                optimizer,
+                ens::PrintLoss(),
+                ens::ProgressBar(),
+                ens::EarlyStopAtMinLoss());
+
+    std::cout << "Final training completed successfully.\n";
+    return true;
 }
