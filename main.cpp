@@ -62,10 +62,10 @@ auto KFoldSplit_Cube(const arma::cube& data, const arma::cube& labels, size_t k,
     if (k == 0 || fold >= k)
         throw std::invalid_argument("KFoldSplit_Cube: invalid fold index or k.");
 
-    size_t n = data.n_slices;
-    size_t foldSize = n / k;
-    size_t start = fold * foldSize;
-    size_t end   = (fold == k - 1) ? n : start + foldSize;
+    const size_t n = data.n_slices;
+    const size_t foldSize = n / k;
+    const size_t start = fold * foldSize;
+    const size_t end   = (fold == k - 1) ? n : start + foldSize;
 
     arma::uvec valIdx = arma::regspace<arma::uvec>(start, end - 1);
     arma::uvec mask(n, arma::fill::ones);
@@ -81,39 +81,53 @@ auto KFoldSplit_Cube(const arma::cube& data, const arma::cube& labels, size_t k,
                           std::make_pair(validData, validLabels));
 }
 
-// --- Time series (expanding window) ---
+// --- Expanding window (time series) ---
 auto KFoldSplit_TimeSeries_Cube(const arma::cube& data, const arma::cube& labels, size_t k, size_t fold)
 {
-    size_t n = data.n_slices;
-    size_t foldSize = n / k;
-    size_t valStart = fold * foldSize;
-    size_t valEnd   = (fold == k - 1) ? n : (fold + 1) * foldSize;
+    const size_t n = data.n_slices;
+    const size_t foldSize = std::max((size_t)1, n / k);
+    const size_t valStart = std::min(fold * foldSize, n - 1);
+    const size_t valEnd   = (fold == k - 1) ? n : std::min((fold + 1) * foldSize, n);
 
     size_t trainEnd = (fold == 0) ? foldSize : valStart;
-    if (trainEnd < 2) trainEnd = foldSize;
+    if (trainEnd < 2) trainEnd = std::min(foldSize, n - 1);
 
-    arma::cube trainData   = data.slices(0, trainEnd - 1);
-    arma::cube trainLabels = labels.slices(0, trainEnd - 1);
-    arma::cube validData   = data.slices(valStart, valEnd - 1);
-    arma::cube validLabels = labels.slices(valStart, valEnd - 1);
+    // Safety: ensure we don't create empty cubes
+    const size_t trainEndSafe = std::min(trainEnd, n - 1);
+    const size_t valStartSafe = std::min(valStart, n - 1);
+    const size_t valEndSafe   = std::max(valStartSafe + 1, valEnd);
 
-    if (trainData.n_slices == 0) trainData = data.slices(0, foldSize - 1);
-    if (validData.n_slices == 0) validData = data.slices(valStart, std::min(valStart + foldSize - 1, n - 1));
+    arma::cube trainData   = data.slices(0, trainEndSafe - 1);
+    arma::cube trainLabels = labels.slices(0, trainEndSafe - 1);
+    arma::cube validData   = data.slices(valStartSafe, valEndSafe - 1);
+    arma::cube validLabels = labels.slices(valStartSafe, valEndSafe - 1);
+
+    // If validation or training accidentally empty, shrink the window slightly
+    if (trainData.n_slices == 0)
+    {
+        trainData   = data.slices(0, std::min((size_t)1, n - 1));
+        trainLabels = labels.slices(0, std::min((size_t)1, n - 1));
+    }
+    if (validData.n_slices == 0)
+    {
+        validData   = data.slices(std::max((size_t)1, n - foldSize), n - 1);
+        validLabels = labels.slices(std::max((size_t)1, n - foldSize), n - 1);
+    }
 
     return std::make_pair(std::make_pair(trainData, trainLabels),
                           std::make_pair(validData, validLabels));
 }
+
 
 // --- Fixed ratio ---
 auto KFoldSplit_FixedRatio_Cube(const arma::cube& data, const arma::cube& labels,
                                 size_t k, size_t fold, double trainRatio)
 {
-    size_t n = data.n_slices;
-    size_t foldSize = n / k;
-    size_t valStart = fold * foldSize;
-    size_t valEnd   = (fold == k - 1) ? n : (fold + 1) * foldSize;
-    size_t trainEnd = static_cast<size_t>(trainRatio * n);
-    if (trainEnd < 2) trainEnd = foldSize;
+    const size_t n = data.n_slices;
+    const size_t foldSize = n / k;
+    const size_t valStart = fold * foldSize;
+    const size_t valEnd   = (fold == k - 1) ? n : (fold + 1) * foldSize;
+    const size_t trainEnd = static_cast<size_t>(trainRatio * n);
 
     arma::cube trainData   = data.slices(0, trainEnd - 1);
     arma::cube trainLabels = labels.slices(0, trainEnd - 1);
@@ -124,16 +138,21 @@ auto KFoldSplit_FixedRatio_Cube(const arma::cube& data, const arma::cube& labels
                           std::make_pair(validData, validLabels));
 }
 
+
 /* --------------------------------------------------------------- */
 /* -------------------- K-Fold Trainer (cube) --------------------- */
 /* --------------------------------------------------------------- */
 
-bool TrainWithKFold_Cube(mlpack::ann::RNN<MeanSquaredError, mlpack::ann::HeInitialization>& model,
-                         arma::cube& trainX,
-                         arma::cube& trainY,
-                         ens::Adam& optimizer,
-                         int nFolds,
-                         int splitMode)
+bool TrainWithKFold_Cube(
+    const size_t inputSize,
+    const size_t outputSize,
+    const size_t rho,
+    arma::cube& X,
+    arma::cube& Y,
+    ens::Adam& optimizer,
+    int nFolds,
+    int splitMode,
+    const std::string& outputPath = "./Results/")
 {
     if (nFolds < 2)
     {
@@ -141,27 +160,34 @@ bool TrainWithKFold_Cube(mlpack::ann::RNN<MeanSquaredError, mlpack::ann::HeIniti
         return false;
     }
 
-    const size_t nSamples = trainX.n_slices;
+    const size_t nSamples = X.n_slices;
     if (nSamples < static_cast<size_t>(nFolds))
     {
         std::cerr << "Error: not enough samples for " << nFolds << " folds.\n";
         return false;
     }
 
-    arma::cube X = trainX, Y = trainY;
+    arma::cube data = X;
+    arma::cube labels = Y;
+    arma::uvec indices;
+
     if (splitMode == 0)
     {
-        arma::uvec indices = arma::randperm(nSamples);
-        X = SelectSlices(X, indices);
-        Y = SelectSlices(Y, indices);
+        indices = arma::randperm(nSamples);
+        data   = SelectSlices(data, indices);
+        labels = SelectSlices(labels, indices);
+        indices.save(outputPath + "shuffle_indices.csv", arma::csv_ascii);
+        std::cout << "[Info] Random shuffle applied.\n";
     }
 
-    const double trainRatio = 1.0 - (1.0 / static_cast<double>(nFolds));
+    const double trainRatio = 1.0 - 1.0 / static_cast<double>(nFolds);
+
+    std::vector<double> trainMSEs, trainR2s, valMSEs, valR2s;
+    double totalTrainMSE = 0.0, totalTrainR2 = 0.0;
+    double totalValMSE = 0.0, totalValR2 = 0.0;
+
     std::cout << "Starting " << nFolds << "-fold cross-validation (mode "
               << splitMode << ", train ratio ≈ " << trainRatio * 100 << "%)...\n";
-
-    double totalValLoss = 0.0, totalR2 = 0.0;
-    std::vector<double> foldLoss, foldR2;
 
     for (int fold = 0; fold < nFolds; ++fold)
     {
@@ -169,75 +195,135 @@ bool TrainWithKFold_Cube(mlpack::ann::RNN<MeanSquaredError, mlpack::ann::HeIniti
 
         if (splitMode == 0)
         {
-            auto split = KFoldSplit_Cube(X, Y, nFolds, fold);
-            Xtrain = split.first.first;
-            Ytrain = split.first.second;
-            Xval   = split.second.first;
-            Yval   = split.second.second;
+            auto s = KFoldSplit_Cube(data, labels, nFolds, fold);
+            Xtrain = s.first.first;  Ytrain = s.first.second;
+            Xval   = s.second.first; Yval   = s.second.second;
         }
         else if (splitMode == 1)
         {
-            auto split = KFoldSplit_TimeSeries_Cube(X, Y, nFolds, fold);
-            Xtrain = split.first.first;
-            Ytrain = split.first.second;
-            Xval   = split.second.first;
-            Yval   = split.second.second;
+            auto s = KFoldSplit_TimeSeries_Cube(data, labels, nFolds, fold);
+            Xtrain = s.first.first;  Ytrain = s.first.second;
+            Xval   = s.second.first; Yval   = s.second.second;
         }
         else
         {
-            auto split = KFoldSplit_FixedRatio_Cube(X, Y, nFolds, fold, trainRatio);
-            Xtrain = split.first.first;
-            Ytrain = split.first.second;
-            Xval   = split.second.first;
-            Yval   = split.second.second;
+            auto s = KFoldSplit_FixedRatio_Cube(data, labels, nFolds, fold, trainRatio);
+            Xtrain = s.first.first;  Ytrain = s.first.second;
+            Xval   = s.second.first; Yval   = s.second.second;
         }
 
-        if (Xtrain.n_slices == 0 || Xval.n_slices == 0)
+        if (Xtrain.n_slices < 2 || Xval.n_slices < 2 || Xtrain.n_cols == 0 || Xval.n_cols == 0)
         {
-            std::cout << "Skipping fold " << fold + 1 << " (empty split)\n";
+            std::cerr << "[Warning] Skipping fold " << fold + 1
+                      << " (empty sequence: "
+                      << Xtrain.n_rows << "×" << Xtrain.n_cols << "×" << Xtrain.n_slices
+                      << " | " << Xval.n_rows << "×" << Xval.n_cols << "×" << Xval.n_slices << ")\n";
             continue;
         }
 
         std::cout << "\nFold " << (fold + 1) << " / " << nFolds
                   << " | Train: " << Xtrain.n_slices
-                  << " | Validation: " << Xval.n_slices << std::endl;
+                  << " | Validation: " << Xval.n_slices
+                  << " | Shape: " << Xtrain.n_rows << "×" << Xtrain.n_cols
+                  << std::endl;
 
-        model.Reset();
-        model.Train(Xtrain, Ytrain, optimizer);
+        std::cout << "[Debug] Xtrain dims: " << Xtrain.n_rows << "×"
+                  << Xtrain.n_cols << "×" << Xtrain.n_slices
+                  << " | Ytrain: " << Ytrain.n_rows << "×"
+                  << Ytrain.n_cols << "×" << Ytrain.n_slices << std::endl;
 
-        arma::cube preds;
-        model.Predict(Xval, preds);
+        // 🧠 Rebuild model fresh each fold
+        RNN<MeanSquaredError, HeInitialization> foldModel(rho);
+        foldModel.Add<Linear>(inputSize);
+        foldModel.Add<LSTM>(20);
+        foldModel.Add<LSTM>(16);
+        foldModel.Add<LSTM>(14);
+        foldModel.Add<ReLU>();
+        foldModel.Add<Linear>(outputSize);
 
-        double valMSE = ComputeMSE(preds, Yval);
-        double valR2  = ComputeR2(preds, Yval);
+        auto start = std::chrono::high_resolution_clock::now();
+        foldModel.Train(Xtrain, Ytrain, optimizer);
+        auto end = std::chrono::high_resolution_clock::now();
+        double timeSec = std::chrono::duration<double>(end - start).count();
 
-        foldLoss.push_back(valMSE);
-        foldR2.push_back(valR2);
-        totalValLoss += valMSE;
-        totalR2 += valR2;
+        // ---- Evaluate training ----
+        arma::cube predTrain;
+        foldModel.Predict(Xtrain, predTrain);
+        double mseTrain = ComputeMSE(predTrain, Ytrain);
+        double r2Train  = ComputeR2(predTrain, Ytrain);
 
-        std::cout << "  Validation MSE: " << valMSE
-                  << " | R²: " << valR2 << std::endl;
+        // ---- Evaluate validation ----
+        arma::cube predVal;
+        foldModel.Predict(Xval, predVal);
+        double mseVal = ComputeMSE(predVal, Yval);
+        double r2Val  = ComputeR2(predVal, Yval);
+
+        trainMSEs.push_back(mseTrain);
+        trainR2s.push_back(r2Train);
+        valMSEs.push_back(mseVal);
+        valR2s.push_back(r2Val);
+        totalTrainMSE += mseTrain;
+        totalTrainR2  += r2Train;
+        totalValMSE   += mseVal;
+        totalValR2    += r2Val;
+
+        std::cout << "  Train MSE: " << mseTrain << " | R²: " << r2Train
+                  << " | Val MSE: " << mseVal << " | R²: " << r2Val
+                  << " | Time: " << timeSec << " s\n";
     }
 
-    if (foldLoss.empty())
-    {
-        std::cerr << "No valid folds processed.\n";
-        return false;
-    }
+    // ---------- Averages ----------
+    const double avgTrainMSE = totalTrainMSE / trainMSEs.size();
+    const double avgTrainR2  = totalTrainR2  / trainR2s.size();
+    const double avgValMSE   = totalValMSE   / valMSEs.size();
+    const double avgValR2    = totalValR2    / valR2s.size();
 
-    double avgLoss = totalValLoss / foldLoss.size();
-    double avgR2   = totalR2 / foldR2.size();
+    std::cout << "\nAverage training   MSE: " << avgTrainMSE
+              << " | R²: " << avgTrainR2 << std::endl;
+    std::cout << "Average validation MSE: " << avgValMSE
+              << " | R²: " << avgValR2 << std::endl;
 
-    std::cout << "\nAverage validation MSE: " << avgLoss
-              << " | Average R²: " << avgR2 << std::endl;
+    // ---------- Save CSV summary ----------
+    const std::string csvPath = outputPath + "kfold_results.csv";
+    std::ofstream file(csvPath);
+    file << "Fold,TrainMSE,TrainR2,ValMSE,ValR2\n";
+    for (size_t i = 0; i < valMSEs.size(); ++i)
+        file << (i + 1) << "," << trainMSEs[i] << "," << trainR2s[i]
+             << "," << valMSEs[i] << "," << valR2s[i] << "\n";
+    file << "Average," << avgTrainMSE << "," << avgTrainR2
+         << "," << avgValMSE << "," << avgValR2 << "\n";
+    file.close();
+    std::cout << "Results saved to: " << csvPath << std::endl;
 
-    std::cout << "Retraining final model on all data...\n";
-    model.Reset();
-    model.Train(trainX, trainY, optimizer);
-    std::cout << "Final training completed.\n";
+    // ---------- Final full-data retrain ----------
+    std::cout << "\nRetraining final model on full dataset...\n";
+    RNN<MeanSquaredError, HeInitialization> finalModel(rho);
+    finalModel.Add<Linear>(inputSize);
+    finalModel.Add<LSTM>(20);
+    finalModel.Add<LSTM>(16);
+    finalModel.Add<LSTM>(14);
+    finalModel.Add<ReLU>();
+    finalModel.Add<Linear>(outputSize);
+
+    finalModel.Train(X, Y, optimizer);
+
+    arma::cube fullPred;
+    finalModel.Predict(X, fullPred);
+
+    double mseFull = ComputeMSE(fullPred, Y);
+    double r2Full  = ComputeR2(fullPred, Y);
+
+    std::cout << "Final full-data MSE: " << mseFull
+              << " | R²: " << r2Full << std::endl;
+
+    std::ofstream csvAppend(csvPath, std::ios::app);
+    csvAppend << "FullDataset," << mseFull << "," << r2Full << ",,\n";
+    csvAppend.close();
+
+    std::cout << "[Done] All results written to: " << outputPath << std::endl;
     return true;
 }
+
 
 /* --------------------------------------------------------------- */
 /* ---------------- Time-Series Data Pre-Processor ---------------- */
@@ -319,7 +405,7 @@ void SaveResults(const string filename,
 /* ---------------------------- main ------------------------------ */
 /* --------------------------------------------------------------- */
 
-int main_()
+int main()
 {
     bool ASM = true, IO = false;
     size_t inputSize = 9, outputSize = 1;
@@ -338,7 +424,7 @@ int main_()
     const bool bLoadAndTrain = false;
     const double RATIO = 0.3;
     const double STEP_SIZE = 5e-5;
-    const int EPOCHS = 1000;
+    const int EPOCHS = 100; // 1000
     const int H1 = 20, H2 = 16, H3 = 14;
     const size_t BATCH_SIZE = 16;
     const int rho = 1;
@@ -383,7 +469,7 @@ int main_()
         optimizer.Tolerance() = -1;
 
         cout << "Training with 5-fold expanding window CV...\n";
-        TrainWithKFold_Cube(model, trainX, trainY, optimizer, 5, 1);
+        TrainWithKFold_Cube(inputSize, outputSize, rho, trainX, trainY, optimizer, 5, 1, path + "Results/");
 
         cout << "Saving model...\n";
         data::Save(modelFile, "LSTMMulti", model);
@@ -420,9 +506,9 @@ int main_()
     return 0;
 }
 
+//--------------------------------------------------------------------------------------------------
 //---------------------------------------OLD version------------------------------------------------
-//---------------------------------------OLD version------------------------------------------------
-//---------------------------------------OLD version------------------------------------------------
+//--------------------------------------------------------------------------------------------------
 
 /**
  * LSTM Wrapper
@@ -546,7 +632,7 @@ void SaveResults_old(const string filename,
 
 }
 
-int main()
+int main_()
 {
 
     bool ASM = 1;
