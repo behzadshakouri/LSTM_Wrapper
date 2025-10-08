@@ -13,8 +13,12 @@ CONFIG += core
 
 DEFINES += GSL
 
-CONFIG += Behzad
-DEFINES += Behzad
+
+CONFIG += PowerEdge
+DEFINES += PowerEdge
+
+#CONFIG += Behzad
+#DEFINES += Behzad
 
 #CONFIG += Arash
 #DEFINES += Arash
