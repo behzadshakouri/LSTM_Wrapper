@@ -242,7 +242,12 @@ bool TrainWithKFold_Cube(
         foldModel.Add<Linear>(outputSize);
 
         auto start = std::chrono::high_resolution_clock::now();
-        foldModel.Train(Xtrain, Ytrain, optimizer);
+        foldModel.Train(
+            Xtrain, Ytrain, optimizer,
+            ens::ProgressBar(),
+            ens::PrintLoss(),
+            ens::EarlyStopAtMinLoss(20)
+        );
         auto end = std::chrono::high_resolution_clock::now();
         double timeSec = std::chrono::duration<double>(end - start).count();
 
@@ -305,7 +310,12 @@ bool TrainWithKFold_Cube(
     finalModel.Add<ReLU>();
     finalModel.Add<Linear>(outputSize);
 
-    finalModel.Train(X, Y, optimizer);
+    finalModel.Train(
+        X, Y, optimizer,
+        ens::ProgressBar(),
+        ens::PrintLoss(),
+        ens::EarlyStopAtMinLoss(20)
+    );
 
     arma::cube fullPred;
     finalModel.Predict(X, fullPred);
@@ -465,7 +475,7 @@ int main()
         }
 
         ens::Adam optimizer(STEP_SIZE, BATCH_SIZE, 0.9, 0.999, 1e-8,
-                            trainData.n_cols * EPOCHS, 1e-8, true);
+                            EPOCHS, 1e-8, true);
         optimizer.Tolerance() = -1;
 
         cout << "Training with 5-fold expanding window CV...\n";
