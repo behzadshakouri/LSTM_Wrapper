@@ -1,5 +1,5 @@
 #include <pch.h>       // must come first
-#include "helpers.h"   // utilities: CreateTimeSeriesData, ComputeMSE, ComputeR2, SaveResults
+#include "helpers.h"   // includes CreateTimeSeriesData, ComputeMSE, ComputeR2, SaveResults
 #include "train_modes.h"
 
 #include <ensmallen.hpp>
@@ -133,7 +133,7 @@ void TrainSingle(const std::string& dataFile,
 
 
 // ============================================================================================
-// TrainKFold (safe index handling + final full retrain + test evaluation)
+// TrainKFold (safe index handling + final full retrain + SaveResults for outputs)
 // ============================================================================================
 
 void TrainKFold(const std::string& dataFile,
@@ -302,12 +302,18 @@ void TrainKFold(const std::string& dataFile,
     cout << "Train MSE = " << mseTrainFinal << ", R² = " << r2TrainFinal << endl;
     cout << "Test  MSE = " << mseTestFinal  << ", R² = " << r2TestFinal  << endl;
 
-    // Save predictions
-    predTrainFull.slice(predTrainFull.n_slices - 1)
-        .save(predFile_Train, arma::csv_ascii);
-    predTestFull.slice(predTestFull.n_slices - 1)
-        .save(predFile_Test, arma::csv_ascii);
-    cout << "[Saved] Final train/test predictions to CSV.\n";
+    // === Save predictions using same SaveResults function ===
+    arma::cube trainIO = trainX, testIO = testX;
+    if (!IO)
+    {
+        trainIO.insert_rows(trainX.n_rows, trainY);
+        testIO.insert_rows(testX.n_rows, testY);
+    }
+
+    SaveResults(predFile_Train, predTrainFull, fullScale, trainIO,
+                (int)inputSize, (int)outputSize, IO);
+    SaveResults(predFile_Test,  predTestFull,  fullScale, testIO,
+                (int)inputSize, (int)outputSize, IO);
 
     // Save model
     data::Save(modelFile, "LSTMMulti", modelFinal);

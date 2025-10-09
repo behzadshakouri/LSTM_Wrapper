@@ -43,7 +43,7 @@ int main()
     const int rho = 1;
     const double RATIO = 0.3;
     const double STEP_SIZE = 5e-5;
-    const size_t EPOCHS = 10;
+    const size_t EPOCHS = 150; // best: 1000 good: 150
     const size_t BATCH_SIZE = 16;
     const bool bTrain = true;
     const bool bLoadAndTrain = false;
