@@ -18,6 +18,9 @@ using namespace ens;
 
 #include <ensmallen.hpp>
 
+#include "helpers.h"
+#include "train_modes.h"
+
 #ifdef PowerEdge
 string path = "/mnt/3rd900/Projects/LSTM_Wrapper/";
 #elif Behzad
@@ -30,10 +33,41 @@ string path = "/home/arash/Projects/LSTM_Wrapper/";
 //                              New pipeline
 // -------------------------------------------------------------------------
 
-#include "helpers.h"
-#include "train_modes.h"
+
+int main()
+{
+    // Old defaults
+    bool ASM = true;
+    bool IO  = false; // ASM => IO=false
+
+    const size_t inputSize = 9;
+    const size_t outputSize = 1;
+    const int rho = 1;
+    const double RATIO = 0.3;
+    const double STEP_SIZE = 5e-5;
+    const size_t EPOCHS = 1000; // << same as old
+    const size_t BATCH_SIZE = 16;
+    const bool bTrain = true;
+    const bool bLoadAndTrain = false;
+
+    std::string path = "/mnt/3rd900/Projects/LSTM_Wrapper/"; // adjust if needed
+    std::string data_name = "NO";
+    std::string dataFile = path + "Data/observedoutput_t10&11_" + data_name + ".txt";
+
+    std::string modelFile = path + "Results/lstm_multi.bin";
+    std::string predFile_Test = path + "Results/lstm_multi_predictions_test.csv";
+    std::string predFile_Train = path + "Results/lstm_multi_predictions_train.csv";
+
+    TrainSingle(dataFile, modelFile, predFile_Test, predFile_Train,
+                inputSize, outputSize, rho, RATIO,
+                STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
+                bTrain, bLoadAndTrain);
+
+    return 0;
+}
 
 
+/*
 int main()
 {
     bool ASM = true;
@@ -79,3 +113,4 @@ int main()
 
     return 0;
 }
+*/

@@ -15,7 +15,7 @@ using namespace std;
 /* ============================================================
  *                K-Fold Training Function
  * ============================================================ */
-
+/*
 bool TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
                 const std::string& predFile_Test,
@@ -154,3 +154,4 @@ bool TrainKFold(const std::string& dataFile,
     data::Save(modelFile, "LSTMMulti", finalModel);
     return true;
 }
+*/
