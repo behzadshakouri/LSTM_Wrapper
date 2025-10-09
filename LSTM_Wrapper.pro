@@ -31,7 +31,6 @@ SOURCES += \
     helpers.cpp \
     lstmtimeseriesset.cpp \
     main.cpp \
-    main_old.cpp \
     train_kfold.cpp \
     train_single.cpp
 
