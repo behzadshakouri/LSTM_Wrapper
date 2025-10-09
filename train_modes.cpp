@@ -1,5 +1,5 @@
-#include <pch.h>       // ✅ must come first
-#include "helpers.h"   // now all mlpack headers use the defined macro
+#include <pch.h>       // must come first
+#include "helpers.h"   // utilities: CreateTimeSeriesData, ComputeMSE, ComputeR2, SaveResults
 #include "train_modes.h"
 
 #include <ensmallen.hpp>
@@ -12,6 +12,10 @@ using namespace mlpack::ann;
 using namespace mlpack::data;
 using namespace ens;
 
+
+// ============================================================================================
+// CORE TRAINING FUNCTION (shared by TrainSingle and TrainKFold final retrain)
+// ============================================================================================
 
 static void TrainCore(arma::mat& trainData,
                       arma::mat& testData,
@@ -98,9 +102,12 @@ static void TrainCore(arma::mat& trainData,
     SaveResults(predFile_Train, predTrain, scale, trainIO, (int)inputSize, (int)outputSize, IO);
 }
 
-// ---------------------------------------------------------
-// TrainSingle (same as before)
-// ---------------------------------------------------------
+
+
+// ============================================================================================
+// TrainSingle (identical to old working version)
+// ============================================================================================
+
 void TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,
                  const std::string& predFile_Test,
@@ -123,29 +130,12 @@ void TrainSingle(const std::string& dataFile,
               batchSize, IO, bTrain, bLoadAndTrain);
 }
 
-// ---------------------------------------------------------
-// TrainKFold (new addition)
-// ---------------------------------------------------------
-/**
- * TrainKFold: Perform K-fold cross-validation, then retrain on full dataset
- * and evaluate on test set.
- *
- * @param dataFile Path to dataset file (e.g., observedoutput_t10&11_NO.txt)
- * @param modelFile Path to model save file
- * @param predFile_Test Path for test predictions CSV
- * @param predFile_Train Path for train predictions CSV
- * @param inputSize Number of input features
- * @param outputSize Number of output targets
- * @param rho Time steps (sequence length)
- * @param kfolds Number of folds for cross-validation
- * @param stepSize Learning rate
- * @param epochs Number of epochs
- * @param batchSize Batch size
- * @param IO Whether outputs are used as inputs
- * @param ASM Whether ASM mode is used (for logging)
- * @param bTrain Whether to train
- * @param bLoadAndTrain Whether to load a pre-trained model and continue training
- */
+
+
+// ============================================================================================
+// TrainKFold (safe index handling + final full retrain + test evaluation)
+// ============================================================================================
+
 void TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
                 const std::string& predFile_Test,
@@ -168,6 +158,12 @@ void TrainKFold(const std::string& dataFile,
     data::Split(dataset, trainValData, testData, RATIO, false);
     cout << "TrainVal: " << trainValData.n_cols << ", Test: " << testData.n_cols << endl;
 
+    // Safe range lambda
+    auto safe_range = [](arma::uword a, arma::uword b) -> arma::uvec {
+        if (b < a) return arma::uvec();
+        return arma::regspace<arma::uvec>(a, b);
+    };
+
     // ====================== K-FOLD TRAINING ======================
     size_t n = trainValData.n_cols;
     size_t foldSize = n / kfolds;
@@ -177,15 +173,30 @@ void TrainKFold(const std::string& dataFile,
     {
         cout << "\n===== Fold " << (fold + 1) << " / " << kfolds << " =====" << endl;
 
-        // Define validation range
         size_t start = fold * foldSize;
-        size_t end = (fold == kfolds - 1) ? n : start + foldSize;
+        size_t end   = (fold == kfolds - 1) ? n : start + foldSize;
 
-        arma::uvec valIdx = arma::regspace<arma::uvec>(start, end - 1);
-        arma::uvec trainIdx = arma::join_cols(
-            arma::regspace<arma::uvec>(0, start - 1),
-            arma::regspace<arma::uvec>(end, n - 1)
-        );
+        arma::uvec valIdx   = safe_range((arma::uword)start, (arma::uword)(end - 1));
+        arma::uvec leftIdx  = (start == 0) ? arma::uvec()
+                                           : safe_range(0, (arma::uword)(start - 1));
+        arma::uvec rightIdx = (end >= n) ? arma::uvec()
+                                         : safe_range((arma::uword)end, (arma::uword)(n - 1));
+
+        arma::uvec trainIdx;
+        if (leftIdx.n_elem && rightIdx.n_elem)
+            trainIdx = arma::join_cols(leftIdx, rightIdx);
+        else if (leftIdx.n_elem)
+            trainIdx = leftIdx;
+        else
+            trainIdx = rightIdx;
+
+        if (trainIdx.n_elem <= (size_t)rho || valIdx.n_elem <= (size_t)rho)
+        {
+            cout << "[Skip] Fold " << (fold + 1)
+                 << " too small after split (train=" << trainIdx.n_elem
+                 << ", val=" << valIdx.n_elem << ", rho=" << rho << ").\n";
+            continue;
+        }
 
         arma::mat trainData = trainValData.cols(trainIdx);
         arma::mat valData   = trainValData.cols(valIdx);
@@ -260,11 +271,6 @@ void TrainKFold(const std::string& dataFile,
 
     CreateTimeSeriesData(trainValData, trainX, trainY, rho, (int)inputSize, (int)outputSize, IO);
     CreateTimeSeriesData(testData, testX, testY, rho, (int)inputSize, (int)outputSize, IO);
-
-    cout << "[Debug] Pre-retrain full data dims: "
-         << trainX.n_rows << "×" << trainX.n_cols
-         << " | outputs: " << trainY.n_rows << "×"
-         << trainY.n_cols << endl;
 
     RNN<MeanSquaredError, HeInitialization> modelFinal(rho);
     const int H1 = 20, H2 = 16, H3 = 14;
