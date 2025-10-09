@@ -1,4 +1,3 @@
-#include <mlpack.hpp>
 #include <armadillo>
 #include <iostream>
 #include <string>

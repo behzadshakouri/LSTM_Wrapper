@@ -1,7 +1,18 @@
+#include <armadillo>
+#include <iostream>
+#include <string>
+#include <vector>
+
+using namespace mlpack;
+using namespace mlpack::ann;
+using namespace mlpack::data;
+using namespace ens;
+using namespace std;
+
 #include <pch.h>       // ✅ must come first
 #include "helpers.h"   // now all mlpack headers use the defined macro
 
-void TrainSingle(const std::string& dataFile,
+bool TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,
                  const std::string& predFile_Test,
                  const std::string& predFile_Train,
@@ -11,19 +22,32 @@ void TrainSingle(const std::string& dataFile,
                  size_t batchSize, bool IO, bool ASM,
                  bool bTrain, bool bLoadAndTrain)
 {
+    cout << "Training on single split..." << endl;
+
     arma::mat dataset;
     data::Load(dataFile, dataset, true);
 
-    // Remove header/date columns if present
+    // Remove header/date column
     dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1);
 
     arma::mat trainData, testData;
-    data::Split(dataset, trainData, testData, ratio, false);
 
+    // ✅ Chronological split (old behavior)
+    data::Split(dataset, trainData, testData, ratio, true);
+
+    // ✅ Scale based on training only
     data::MinMaxScaler scale;
     scale.Fit(trainData);
     scale.Transform(trainData, trainData);
     scale.Transform(testData, testData);
+
+    // Prevent out-of-range values due to unseen test distribution
+    testData = arma::clamp(testData, 0.0, 1.0);
+
+    // ✅ Optional debug scaling check
+    cout << std::fixed << setprecision(3);
+    cout << "Train range: [" << trainData.min() << ", " << trainData.max() << "]" << endl;
+    cout << "Test  range: [" << testData.min()  << ", " << testData.max()  << "]" << endl;
 
     arma::cube trainX(inputSize, trainData.n_cols - rho, rho);
     arma::cube trainY(outputSize, trainData.n_cols - rho, rho);
@@ -39,32 +63,36 @@ void TrainSingle(const std::string& dataFile,
 
         if (bLoadAndTrain)
         {
-            std::cout << "Loading existing model for further training..." << std::endl;
+            cout << "Loading and continuing training..." << endl;
             data::Load(modelFile, "LSTMMulti", model);
         }
         else
         {
+            // ✅ Restore old architecture (stronger)
             model.Add<Linear>(inputSize);
-            model.Add<LSTM>(20);
-            model.Add<LSTM>(16);
-            model.Add<LSTM>(14);
+            model.Add<LSTM>(40);
+            model.Add<LSTM>(32);
+            model.Add<LSTM>(28);
             model.Add<ReLU>();
             model.Add<Linear>(outputSize);
         }
 
+        // ✅ Restore old epochs & training intensity
         ens::Adam optimizer(stepSize, batchSize, 0.9, 0.999, 1e-8,
                             trainData.n_cols * epochs, 1e-8, true);
         optimizer.Tolerance() = -1;
 
-        std::cout << "Training on single split..." << std::endl;
+        cout << "Epochs: " << epochs << ", Step size: " << stepSize << endl;
 
         model.Train(trainX, trainY, optimizer,
-                    ens::PrintLoss(), ens::ProgressBar(), ens::EarlyStopAtMinLoss());
+                    ens::PrintLoss(), ens::ProgressBar(),
+                    ens::EarlyStopAtMinLoss());
 
         data::Save(modelFile, "LSTMMulti", model);
-        std::cout << "Model saved to: " << modelFile << std::endl;
+        cout << "Model saved to: " << modelFile << endl;
     }
 
+    // Reload and predict
     RNN<MeanSquaredError, HeInitialization> modelP(rho);
     data::Load(modelFile, "LSTMMulti", modelP);
 
@@ -73,24 +101,17 @@ void TrainSingle(const std::string& dataFile,
     modelP.Predict(testX, predTest);
 
     double mseTrain = ComputeMSE(predTrain, trainY);
-    double r2Train  = ComputeR2(predTrain, trainY);
     double mseTest  = ComputeMSE(predTest, testY);
+    double r2Train  = ComputeR2(predTrain, trainY);
     double r2Test   = ComputeR2(predTest, testY);
 
-    std::cout << "Test  MSE = " << mseTest  << ", R² = " << r2Test  << std::endl;
-    std::cout << "Train MSE = " << mseTrain << ", R² = " << r2Train << std::endl;
+    cout << "Test  MSE = " << mseTest  << ", R² = " << r2Test  << endl;
+    cout << "Train MSE = " << mseTrain << ", R² = " << r2Train << endl;
 
-    arma::cube trainIO = trainX;
-    arma::cube testIO  = testX;
-    if (!IO)
-    {
-        trainIO.insert_rows(trainX.n_rows, trainY);
-        testIO.insert_rows(testX.n_rows, testY);
-    }
+    cout << "Saving results..." << endl;
+    SaveResults(predFile_Test,  predTest,  scale, testX,  inputSize, outputSize, IO);
+    SaveResults(predFile_Train, predTrain, scale, trainX, inputSize, outputSize, IO);
 
-    std::cout << "Saving results..." << std::endl;
-    SaveResults(predFile_Test, predTest, scale, testIO, inputSize, outputSize, IO);
-    SaveResults(predFile_Train, predTrain, scale, trainIO, inputSize, outputSize, IO);
-
-    std::cout << "✅ Done (TrainSingle mode)." << std::endl;
+    cout << "✅ Done (TrainSingle mode)." << endl;
+    return true;
 }

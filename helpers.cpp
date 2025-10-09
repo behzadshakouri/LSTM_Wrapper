@@ -1,17 +1,16 @@
 #include "helpers.h"
-#include <mlpack.hpp>
 #include <armadillo>
 #include <iostream>
 #include <string>
+
+#include <pch.h>       // ✅ must come first
+#include "helpers.h"   // now all mlpack headers use the defined macro
 
 using namespace mlpack;
 using namespace mlpack::ann;
 using namespace mlpack::data;
 using namespace ens;
 using namespace std;
-
-#include <pch.h>       // ✅ must come first
-#include "helpers.h"   // now all mlpack headers use the defined macro
 
 /* ============================================================
  *                Metric Functions
@@ -72,28 +71,53 @@ void CreateTimeSeriesData(const arma::mat& dataset,
 
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
-                 mlpack::data::MinMaxScaler& scale,
+                 data::MinMaxScaler& scale,
                  const arma::cube& IOData,
-                 int inputsize, int outputsize,
-                 bool IO)
+                 const int inputsize,
+                 const int outputsize,
+                 const bool IO)
 {
-    arma::mat flatData = IOData.slice(IOData.n_slices - 1);
-    scale.InverseTransform(flatData, flatData);
+    arma::mat flatDataAndPreds = IOData.slice(IOData.n_slices - 1);
+    scale.InverseTransform(flatDataAndPreds, flatDataAndPreds);
 
-    arma::mat pred = predictions.slice(predictions.n_slices - 1);
-    pred.insert_rows(0, inputsize, 0);
-    scale.InverseTransform(pred, pred);
+    arma::mat temp = predictions.slice(predictions.n_slices - 1);
+    arma::mat tempExp = temp; // copy for transformation
 
-    // Append columns for alignment with input
-    pred.insert_cols(0, 1, true);
-    flatData.insert_cols(flatData.n_cols, 1, true);
-    flatData.insert_rows(flatData.n_rows,
-                         pred.rows(pred.n_rows - outputsize, pred.n_rows - 1));
+    // Pad appropriately based on IO mode
+    if (!IO)
+        tempExp.insert_rows(0, inputsize, 0);   // ASM: add inputs
+    else
+        tempExp.insert_rows(0, inputsize - outputsize, 0); // IO: add input minus outputs
 
-    data::Save(filename, flatData);
+    scale.InverseTransform(tempExp, tempExp);
+
+    // Ensure consistent row count
+    size_t nrows = std::max(flatDataAndPreds.n_rows, tempExp.n_rows);
+    if (flatDataAndPreds.n_rows < nrows)
+    {
+        arma::mat padded = arma::join_cols(flatDataAndPreds,
+                                           arma::zeros<arma::mat>(nrows - flatDataAndPreds.n_rows,
+                                                                  flatDataAndPreds.n_cols));
+        flatDataAndPreds = std::move(padded);
+    }
+
+    // Add one empty column for alignment
+    tempExp.insert_cols(0, 1, true);
+    flatDataAndPreds.insert_cols(flatDataAndPreds.n_cols, 1, true);
+
+    // Append prediction rows safely
+    size_t nPredRows = std::min((size_t)outputsize, (size_t)tempExp.n_rows);
+    flatDataAndPreds.insert_rows(flatDataAndPreds.n_rows,
+                                 tempExp.rows(tempExp.n_rows - nPredRows, tempExp.n_rows - 1));
+
+    data::Save(filename, flatDataAndPreds);
+
     cout << "Saved predictions to: " << filename << endl;
     cout << "Predicted output (last): ";
-    for (int i = outputsize - 1; i >= 0; --i)
-        cout << "(" << flatData(flatData.n_rows - 1 - i, flatData.n_cols - 1) << ") ";
+    for (int i = 0; i < outputsize; ++i)
+        cout << "(" << flatDataAndPreds(flatDataAndPreds.n_rows - outputsize + i,
+                                        flatDataAndPreds.n_cols - 1) << ") ";
     cout << endl;
 }
+
+

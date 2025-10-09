@@ -20,7 +20,8 @@ void CreateTimeSeriesData(const arma::mat& dataset,
 
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
-                 mlpack::data::MinMaxScaler& scale,
+                 data::MinMaxScaler& scale,
                  const arma::cube& IOData,
-                 int inputsize, int outputsize,
-                 bool IO);
+                 const int inputsize,
+                 const int outputsize,
+                 const bool IO);
