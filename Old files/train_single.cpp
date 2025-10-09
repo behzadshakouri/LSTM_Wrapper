@@ -16,7 +16,7 @@ using namespace std;
 
 #include <ensmallen.hpp>
 
-void TrainSingle(const std::string& dataFile,
+void TrainSingle_(const std::string& dataFile,
                  const std::string& modelFile,
                  const std::string& predFile_Test,
                  const std::string& predFile_Train,
@@ -100,14 +100,14 @@ void TrainSingle(const std::string& dataFile,
     modelP.Predict(testX , predTest);
     modelP.Predict(trainX, predTrain);
 
-    double mseTest  = ComputeMSE(predTest , testY );
     double mseTrain = ComputeMSE(predTrain, trainY);
-    double r2Test   = ComputeR2(predTest , testY );
+    double mseTest  = ComputeMSE(predTest , testY );
+
     double r2Train  = ComputeR2(predTrain, trainY);
+    double r2Test   = ComputeR2(predTest , testY );
 
-    cout << "Test  MSE = " << mseTest  << ", R² = " << r2Test  << endl;
     cout << "Train MSE = " << mseTrain << ", R² = " << r2Train << endl;
-
+    cout << "Test  MSE = " << mseTest  << ", R² = " << r2Test  << endl;
 
     // === Save outputs (identical layout) ===
     arma::cube testIO  = testX;

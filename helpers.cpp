@@ -27,7 +27,7 @@ double ComputeR2(arma::cube& pred, arma::cube& Y)
     double mean_y = arma::mean(yTrue);
     double ss_tot = arma::accu(arma::square(yTrue - mean_y));
 
-    if (ss_tot == 0.0)  // prevent division by zero
+    if (ss_tot == 0.0)
         return 0.0;
 
     return 1.0 - (ss_res / ss_tot);
@@ -64,14 +64,11 @@ void SaveResults(const std::string& filename,
 
     cout << "Saved predictions to: " << filename << endl;
     cout << "The predicted output (last one) is: " << endl;
-    int counter = outputsize;
-    while (counter > 0)
-    {
-        cout << " (" << flatDataAndPreds(flatDataAndPreds.n_rows - counter,
+    for (int i = outputsize - 1; i >= 0; --i)
+        cout << " (" << flatDataAndPreds(flatDataAndPreds.n_rows - outputsize + i,
                                          flatDataAndPreds.n_cols - 1) << ") " << endl;
-        --counter;
-    }
 }
+
 
 /* ============================================================
  *                Metric Functions

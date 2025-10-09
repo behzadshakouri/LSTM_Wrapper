@@ -31,8 +31,7 @@ SOURCES += \
     helpers.cpp \
     lstmtimeseriesset.cpp \
     main.cpp \
-    train_kfold.cpp \
-    train_single.cpp
+    train_modes.cpp
 
 
 DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS _ARMA

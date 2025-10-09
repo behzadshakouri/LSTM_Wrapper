@@ -16,6 +16,16 @@ void TrainSingle(const std::string& dataFile,
                  size_t batchSize, bool IO, bool ASM,
                  bool bTrain, bool bLoadAndTrain);
 
+void TrainKFold(const std::string& dataFile,
+                const std::string& modelFile,
+                const std::string& predFile_Test,
+                const std::string& predFile_Train,
+                size_t inputSize, size_t outputSize,
+                int rho, int kfolds,
+                double stepSize, size_t epochs,
+                size_t batchSize, bool IO, bool ASM,
+                bool bTrain, bool bLoadAndTrain);
+
 /*
 bool TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
