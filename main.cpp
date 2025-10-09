@@ -36,7 +36,6 @@ string path = "/home/arash/Projects/LSTM_Wrapper/";
 
 int main()
 {
-    std::string path = "./";
     bool ASM = true;
     bool IO = ASM ? false : true;
 

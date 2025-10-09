@@ -1,6 +1,9 @@
 #pragma once
 #include <string>
 
+#include <pch.h>       // ✅ must come first
+#include "helpers.h"   // now all mlpack headers use the defined macro
+
 bool TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
                 const std::string& predFile_Test,

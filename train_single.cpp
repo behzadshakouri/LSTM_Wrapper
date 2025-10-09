@@ -1,4 +1,5 @@
-#include "helpers.h"
+#include <pch.h>       // ✅ must come first
+#include "helpers.h"   // now all mlpack headers use the defined macro
 
 void TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,

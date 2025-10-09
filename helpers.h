@@ -3,6 +3,8 @@
 #include <armadillo>
 #include <string>
 
+#include <pch.h>       // ✅ must come first
+
 using namespace mlpack;
 using namespace mlpack::data;
 

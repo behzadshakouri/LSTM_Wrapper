@@ -10,7 +10,8 @@ using namespace mlpack::data;
 using namespace ens;
 using namespace std;
 
-#include "helpers.h"
+#include <pch.h>       // ✅ must come first
+#include "helpers.h"   // now all mlpack headers use the defined macro
 
 /* ============================================================
  *                K-Fold Training Function
