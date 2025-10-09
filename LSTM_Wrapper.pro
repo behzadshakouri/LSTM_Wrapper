@@ -43,6 +43,8 @@ CONFIG += use_VTK
 INCLUDEPATH += $$OHQPATH
 INCLUDEPATH += /usr/local/include
 
+INCLUDEPATH += $$HOME/Libraries/ensmallen/include
+
 LIBS += -larmadillo -llapack -lblas -lgsl -lboost_filesystem -lboost_system -lboost_iostreams
 LIBS += -lgomp -lpthread
 
