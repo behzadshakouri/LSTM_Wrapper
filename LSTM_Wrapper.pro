@@ -28,8 +28,12 @@ QMAKE_LFLAGS +=  -fopenmp
 
 
 SOURCES += \
+    helpers.cpp \
     lstmtimeseriesset.cpp \
-    main.cpp
+    main.cpp \
+    main_old.cpp \
+    train_kfold.cpp \
+    train_single.cpp
 
 
 DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS _ARMA
@@ -49,6 +53,8 @@ LIBS += -larmadillo -llapack -lblas -lgsl -lboost_filesystem -lboost_system -lbo
 LIBS += -lgomp -lpthread
 
 HEADERS += \
+    helpers.h \
     lstmtimeseriesset.h \
-    pch.h
+    pch.h \
+    train_modes.h
 

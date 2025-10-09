@@ -1,0 +1,24 @@
+#pragma once
+#include <mlpack.hpp>
+#include <armadillo>
+#include <string>
+
+using namespace mlpack;
+using namespace mlpack::data;
+
+// ================= Function Declarations ==================
+
+double ComputeMSE(const arma::cube& pred, const arma::cube& Y);
+double ComputeR2(const arma::cube& pred, const arma::cube& Y);
+
+void CreateTimeSeriesData(const arma::mat& dataset,
+                          arma::cube& X, arma::cube& y,
+                          size_t rho, size_t inputSize,
+                          size_t outputSize, bool IO);
+
+void SaveResults(const std::string& filename,
+                 const arma::cube& predictions,
+                 mlpack::data::MinMaxScaler& scale,
+                 const arma::cube& IOData,
+                 int inputsize, int outputsize,
+                 bool IO);
