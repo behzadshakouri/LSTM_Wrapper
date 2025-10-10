@@ -48,7 +48,7 @@ int main()
     const bool bTrain = true;
     const bool bLoadAndTrain = false;
     int mode = 0; // 0=single, 1=kfold
-    const int KFOLDS = 3;
+    const int KFOLDS = 10;
 
     std::string data_name = "NO";
     std::string dataFile = path + "Data/observedoutput_t10&11_" + data_name + ".txt";
