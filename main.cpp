@@ -48,11 +48,11 @@ int main()
     const double STEP_SIZE  = 5e-5;
     const size_t EPOCHS     = 1000;   // best: 1000
     const size_t BATCH_SIZE = 16;
-    const int KFOLDS        = 10;
 
     // --- Mode selection ---
     int mode = 1;        // 0 = single, 1 = k-fold
-    int kfoldMode = 1;   // 0=Random, 1=TimeSeries, 2=FixedRatio
+    int kfoldMode = 2;   // 0 = Random, 1 = TimeSeries, 2 = FixedRatio
+    const int KFOLDS = 10; // Kfold number
     double trainRatio = 0.9;   // used only in FixedRatio
     double testHoldout = 0.3;  // test split fraction
 
