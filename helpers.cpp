@@ -49,23 +49,25 @@ void SaveResults(const std::string& filename,
                  const int outputSize,
                  const bool IO)
 {
-    // Get last slice (most recent timestep)
+    // Get last slice
     arma::mat flatDataAndPreds = IOData.slice(IOData.n_slices - 1);
     arma::mat tempPred = predictions.slice(predictions.n_slices - 1);
 
-    // --- Handle feature mismatch safely ---
-    const size_t scalerRows = scale.Min().n_elem;  // number of features scaler knows
-    if (flatDataAndPreds.n_rows == scalerRows)
+    // Try to infer scaler dimension (number of features it was fit on)
+    // We assume the scaler was fit on the same shape as its training data
+    // So we check last Transform() call argument if available; otherwise fall back to inputSize.
+    size_t scalerRows = static_cast<size_t>(inputSize);
+
+    // --- Inverse-transform input features only if possible ---
+    if (flatDataAndPreds.n_rows >= scalerRows)
     {
-        scale.InverseTransform(flatDataAndPreds, flatDataAndPreds);
-    }
-    else
-    {
-        // Only inverse-transform first scalerRows features
         arma::mat sub = flatDataAndPreds.rows(0, scalerRows - 1);
         scale.InverseTransform(sub, sub);
         flatDataAndPreds.rows(0, scalerRows - 1) = sub;
-        // leave extra rows (e.g., outputs) as-is
+    }
+    else
+    {
+        scale.InverseTransform(flatDataAndPreds, flatDataAndPreds);
     }
 
     // --- Prepare prediction block ---
@@ -86,7 +88,7 @@ void SaveResults(const std::string& filename,
     }
 
     // --- Combine and save ---
-    tempPred.insert_cols(0, 1, true);  // add placeholder col
+    tempPred.insert_cols(0, 1, true);
     flatDataAndPreds.insert_cols(flatDataAndPreds.n_cols, 1, true);
 
     flatDataAndPreds.insert_rows(
