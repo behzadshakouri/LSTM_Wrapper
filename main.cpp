@@ -50,15 +50,15 @@ int main()
     const size_t BATCH_SIZE = 16;
 
     // --- LSTM architecture ---
-    const int H1 = 20;
-    const int H2 = 16;
-    const int H3 = 14;
+    const int H1 = 20; // 20
+    const int H2 = 16; // 16
+    const int H3 = 14; // 14
 
     // --- Mode selection ---
-    int mode = 1;        // 0 = single, 1 = k-fold
+    int mode = 0;        // 0 = single, 1 = k-fold
     int kfoldMode = 2;   // 0 = Random, 1 = TimeSeries, 2 = FixedRatio
-    const int KFOLDS = 10;
-    double trainRatio = 0.9;   // used only in FixedRatio
+    const int KFOLDS = 10;   // At least 3
+    double trainRatio = static_cast<double>(KFOLDS - 1) / KFOLDS;   // used only in FixedRatio
     double testHoldout = 0.3;  // test split fraction
 
     std::string data_name = "NO";

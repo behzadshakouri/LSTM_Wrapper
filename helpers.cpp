@@ -45,36 +45,65 @@ void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
                  mlpack::data::MinMaxScaler& scale,
                  const arma::cube& IOData,
-                 const int inputsize,
-                 const int outputsize,
+                 const int inputSize,
+                 const int outputSize,
                  const bool IO)
 {
+    // Get last slice (most recent timestep)
     arma::mat flatDataAndPreds = IOData.slice(IOData.n_slices - 1);
-    scale.InverseTransform(flatDataAndPreds, flatDataAndPreds);
+    arma::mat tempPred = predictions.slice(predictions.n_slices - 1);
 
-    arma::mat temp = predictions.slice(predictions.n_slices - 1);
-    if (!IO)
-        temp.insert_rows(0, inputsize, 0);
+    // --- Handle feature mismatch safely ---
+    const size_t scalerRows = scale.Min().n_elem;  // number of features scaler knows
+    if (flatDataAndPreds.n_rows == scalerRows)
+    {
+        scale.InverseTransform(flatDataAndPreds, flatDataAndPreds);
+    }
     else
-        temp.insert_rows(0, inputsize - outputsize, 0);
+    {
+        // Only inverse-transform first scalerRows features
+        arma::mat sub = flatDataAndPreds.rows(0, scalerRows - 1);
+        scale.InverseTransform(sub, sub);
+        flatDataAndPreds.rows(0, scalerRows - 1) = sub;
+        // leave extra rows (e.g., outputs) as-is
+    }
 
-    scale.InverseTransform(temp, temp);
+    // --- Prepare prediction block ---
+    if (!IO)
+        tempPred.insert_rows(0, inputSize, 0.0);
+    else
+        tempPred.insert_rows(0, inputSize - outputSize, 0.0);
 
-    temp.insert_cols(0, 1, true);
+    if (tempPred.n_rows >= scalerRows)
+    {
+        arma::mat sub = tempPred.rows(0, scalerRows - 1);
+        scale.InverseTransform(sub, sub);
+        tempPred.rows(0, scalerRows - 1) = sub;
+    }
+    else
+    {
+        scale.InverseTransform(tempPred, tempPred);
+    }
+
+    // --- Combine and save ---
+    tempPred.insert_cols(0, 1, true);  // add placeholder col
     flatDataAndPreds.insert_cols(flatDataAndPreds.n_cols, 1, true);
 
     flatDataAndPreds.insert_rows(
         flatDataAndPreds.n_rows,
-        temp.rows(temp.n_rows - outputsize, temp.n_rows - 1)
+        tempPred.rows(tempPred.n_rows - outputSize, tempPred.n_rows - 1)
     );
 
     mlpack::data::Save(filename, flatDataAndPreds);
 
+    // --- Print info ---
     cout << "Saved predictions to: " << filename << endl;
     cout << "The predicted output (last one) is: " << endl;
-    for (int i = outputsize - 1; i >= 0; --i)
-        cout << " (" << flatDataAndPreds(flatDataAndPreds.n_rows - outputsize + i,
+    for (int i = outputSize - 1; i >= 0; --i)
+    {
+        cout << " (" << flatDataAndPreds(flatDataAndPreds.n_rows - outputSize + i,
                                          flatDataAndPreds.n_cols - 1) << ") " << endl;
+    }
 }
 
 /* ============================================================
