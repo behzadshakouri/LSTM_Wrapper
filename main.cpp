@@ -49,10 +49,15 @@ int main()
     const size_t EPOCHS     = 1000;   // best: 1000
     const size_t BATCH_SIZE = 16;
 
+    // --- LSTM architecture ---
+    const int H1 = 20;
+    const int H2 = 16;
+    const int H3 = 14;
+
     // --- Mode selection ---
     int mode = 1;        // 0 = single, 1 = k-fold
     int kfoldMode = 2;   // 0 = Random, 1 = TimeSeries, 2 = FixedRatio
-    const int KFOLDS = 10; // Kfold number
+    const int KFOLDS = 10;
     double trainRatio = 0.9;   // used only in FixedRatio
     double testHoldout = 0.3;  // test split fraction
 
@@ -69,7 +74,8 @@ int main()
         TrainSingle(dataFile, modelFile, predFile_Test, predFile_Train,
                     inputSize, outputSize, rho, RATIO,
                     STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
-                    bTrain, bLoadAndTrain);
+                    bTrain, bLoadAndTrain,
+                    H1, H2, H3);
     }
     else
     {
@@ -83,7 +89,8 @@ int main()
                             inputSize, outputSize, rho, KFOLDS,
                             STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
                             bTrain, bLoadAndTrain,
-                            kfoldMode, trainRatio, testHoldout);
+                            kfoldMode, trainRatio, testHoldout,
+                            H1, H2, H3);
     }
 
     qInfo() << "✅ Training process completed successfully.";

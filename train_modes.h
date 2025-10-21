@@ -15,9 +15,8 @@ enum class KFoldMode
     FixedRatio = 2   // fixed training prefix + moving validation fold
 };
 
-
 // ============================================================================================
-// Training function declarations
+// Training function declarations (with configurable LSTM architecture)
 // ============================================================================================
 
 // ---- Single train/test split ----
@@ -29,7 +28,8 @@ void TrainSingle(const std::string& dataFile,
                  int rho, double ratio,
                  double stepSize, size_t epochs,
                  size_t batchSize, bool IO, bool ASM,
-                 bool bTrain, bool bLoadAndTrain);
+                 bool bTrain, bool bLoadAndTrain,
+                 int H1, int H2, int H3);   // 🔹 NEW hidden layer sizes
 
 // ---- K-Fold (default TimeSeries mode) ----
 void TrainKFold(const std::string& dataFile,
@@ -40,7 +40,8 @@ void TrainKFold(const std::string& dataFile,
                 int rho, int kfolds,
                 double stepSize, size_t epochs,
                 size_t batchSize, bool IO, bool ASM,
-                bool bTrain, bool bLoadAndTrain);
+                bool bTrain, bool bLoadAndTrain,
+                int H1, int H2, int H3);   // 🔹 NEW hidden layer sizes
 
 // ---- Extended K-Fold (user-selectable mode + ratio) ----
 void TrainKFold_WithMode(const std::string& dataFile,
@@ -54,4 +55,5 @@ void TrainKFold_WithMode(const std::string& dataFile,
                          bool bTrain, bool bLoadAndTrain,
                          int modeInt,          // 0=Random, 1=TimeSeries, 2=FixedRatio
                          double trainRatio,    // used only for FixedRatio
-                         double testHoldout);  // e.g. 0.3 to mirror TrainSingle
+                         double testHoldout,   // e.g. 0.3 to mirror TrainSingle
+                         int H1, int H2, int H3);  // 🔹 NEW hidden layer sizes
