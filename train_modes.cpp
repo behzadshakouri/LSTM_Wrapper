@@ -13,18 +13,14 @@ using namespace mlpack::ann;
 using namespace mlpack::data;
 using namespace ens;
 
+/* ============================================================
+ *                  Splitters (Random / TimeSeries / FixedRatio)
+ * ============================================================ */
 
-// ============================================================================================
-// Splitters (FFN-style API; here labels are not used by LSTM, but we keep the signature)
-// ============================================================================================
-
-static
-std::pair<std::pair<arma::mat, arma::mat>,
-          std::pair<arma::mat, arma::mat>>
-KFoldSplit(const arma::mat& data,
-           const arma::mat& labels,
-           size_t k,
-           size_t fold)
+static auto KFoldSplit(const arma::mat& data,
+                       const arma::mat& labels,
+                       size_t k,
+                       size_t fold)
 {
     if (k == 0 || fold >= k)
         throw std::invalid_argument("KFoldSplit: invalid fold or k.");
@@ -39,21 +35,16 @@ KFoldSplit(const arma::mat& data,
     mask(valIdx).zeros();
     arma::uvec trainIdx = arma::find(mask == 1);
 
-    arma::mat trainData   = data.cols(trainIdx);
-    arma::mat trainLabels = labels.cols(trainIdx);
-    arma::mat validData   = data.cols(valIdx);
-    arma::mat validLabels = labels.cols(valIdx);
-
-    return {{trainData, trainLabels}, {validData, validLabels}};
+    return make_pair(
+        make_pair(data.cols(trainIdx), labels.cols(trainIdx)),
+        make_pair(data.cols(valIdx), labels.cols(valIdx))
+    );
 }
 
-static
-std::pair<std::pair<arma::mat, arma::mat>,
-          std::pair<arma::mat, arma::mat>>
-KFoldSplit_TimeSeries(const arma::mat& data,
-                      const arma::mat& labels,
-                      size_t k,
-                      size_t fold)
+static auto KFoldSplit_TimeSeries(const arma::mat& data,
+                                  const arma::mat& labels,
+                                  size_t k,
+                                  size_t fold)
 {
     if (k < 2) throw std::invalid_argument("KFoldSplit_TimeSeries: k must be >= 2.");
     if (fold >= k) throw std::invalid_argument("KFoldSplit_TimeSeries: fold out of range.");
@@ -62,26 +53,20 @@ KFoldSplit_TimeSeries(const arma::mat& data,
     const size_t foldSize = n / k;
     const size_t valStart = fold * foldSize;
     const size_t valEnd   = (fold == k - 1) ? n : (fold + 1) * foldSize;
-
     size_t trainEnd = (valStart == 0) ? foldSize : valStart;
-    if (trainEnd < 2) trainEnd = 2;
+    trainEnd = std::max<size_t>(2, trainEnd);
 
-    arma::mat trainData   = data.cols(0, trainEnd - 1);
-    arma::mat trainLabels = labels.cols(0, trainEnd - 1);
-    arma::mat validData   = data.cols(valStart, valEnd - 1);
-    arma::mat validLabels = labels.cols(valStart, valEnd - 1);
-
-    return {{trainData, trainLabels}, {validData, validLabels}};
+    return make_pair(
+        make_pair(data.cols(0, trainEnd - 1), labels.cols(0, trainEnd - 1)),
+        make_pair(data.cols(valStart, valEnd - 1), labels.cols(valStart, valEnd - 1))
+    );
 }
 
-static
-std::pair<std::pair<arma::mat, arma::mat>,
-          std::pair<arma::mat, arma::mat>>
-KFoldSplit_FixedRatio(const arma::mat& data,
-                      const arma::mat& labels,
-                      size_t k,
-                      size_t fold,
-                      double trainRatio)
+static auto KFoldSplit_FixedRatio(const arma::mat& data,
+                                  const arma::mat& labels,
+                                  size_t k,
+                                  size_t fold,
+                                  double trainRatio)
 {
     if (k < 2) throw std::invalid_argument("KFoldSplit_FixedRatio: k must be >= 2.");
     if (fold >= k) throw std::invalid_argument("KFoldSplit_FixedRatio: fold out of range.");
@@ -94,18 +79,17 @@ KFoldSplit_FixedRatio(const arma::mat& data,
     const size_t valEnd   = (fold == k - 1) ? n : (fold + 1) * foldSize;
     const size_t trainEnd = std::max<size_t>(2, static_cast<size_t>(trainRatio * n));
 
-    arma::mat trainData   = data.cols(0, std::min(trainEnd, n) - 1);
-    arma::mat trainLabels = labels.cols(0, std::min(trainEnd, n) - 1);
-    arma::mat validData   = data.cols(valStart, valEnd - 1);
-    arma::mat validLabels = labels.cols(valStart, valEnd - 1);
-
-    return {{trainData, trainLabels}, {validData, validLabels}};
+    return make_pair(
+        make_pair(data.cols(0, std::min(trainEnd, n) - 1),
+                  labels.cols(0, std::min(trainEnd, n) - 1)),
+        make_pair(data.cols(valStart, valEnd - 1),
+                  labels.cols(valStart, valEnd - 1))
+    );
 }
 
-
-// ============================================================================================
-// CORE TRAINING FUNCTION (shared by TrainSingle and TrainKFold final retrain)
-// ============================================================================================
+/* ============================================================
+ *                  Core Training Function
+ * ============================================================ */
 
 static void TrainCore(arma::mat& trainData,
                       arma::mat& testData,
@@ -130,6 +114,8 @@ static void TrainCore(arma::mat& trainData,
 
     CreateTimeSeriesData(trainData, trainX, trainY, rho, (int)inputSize, (int)outputSize, IO);
     CreateTimeSeriesData(testData , testX , testY , rho, (int)inputSize, (int)outputSize, IO);
+
+    ValidateShapes(trainData, trainX, trainY, inputSize, outputSize, rho);
 
     if (bTrain || bLoadAndTrain)
     {
@@ -176,22 +162,13 @@ static void TrainCore(arma::mat& trainData,
     cout << "Test  MSE = " << mseTest  << ", R² = " << r2Test  << endl;
     cout << "Train MSE = " << mseTrain << ", R² = " << r2Train << endl;
 
-    arma::cube testIO  = testX;
-    arma::cube trainIO = trainX;
-    if (!IO)
-    {
-        testIO.insert_rows (testX.n_rows , testY );
-        trainIO.insert_rows(trainX.n_rows, trainY);
-    }
-
-    SaveResults(predFile_Test , predTest , scale, testIO , (int)inputSize, (int)outputSize, IO);
-    SaveResults(predFile_Train, predTrain, scale, trainIO, (int)inputSize, (int)outputSize, IO);
+    SaveResults(predFile_Test , predTest , scale, testX , (int)inputSize, (int)outputSize, IO);
+    SaveResults(predFile_Train, predTrain, scale, trainX, (int)inputSize, (int)outputSize, IO);
 }
 
-
-// ============================================================================================
-// TrainSingle
-// ============================================================================================
+/* ============================================================
+ *                  Single Train/Test Mode
+ * ============================================================ */
 
 void TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,
@@ -217,25 +194,23 @@ void TrainSingle(const std::string& dataFile,
               H1, H2, H3);
 }
 
+/* ============================================================
+ *                  K-Fold Mode (with selector)
+ * ============================================================ */
 
-// ============================================================================================
-// TrainKFold Implementation (with mode and ratio)
-// ============================================================================================
-
-static
-void TrainKFold_Impl(const std::string& dataFile,
-                     const std::string& modelFile,
-                     const std::string& predFile_Test,
-                     const std::string& predFile_Train,
-                     size_t inputSize, size_t outputSize,
-                     int rho, int kfolds,
-                     double stepSize, size_t epochs,
-                     size_t batchSize, bool IO, bool /*ASM*/,
-                     bool bTrain, bool bLoadAndTrain,
-                     KFoldMode mode,
-                     double trainRatioForFixed,
-                     double holdoutRatioForTest,
-                     int H1, int H2, int H3)
+static void TrainKFold_Impl(const std::string& dataFile,
+                            const std::string& modelFile,
+                            const std::string& predFile_Test,
+                            const std::string& predFile_Train,
+                            size_t inputSize, size_t outputSize,
+                            int rho, int kfolds,
+                            double stepSize, size_t epochs,
+                            size_t batchSize, bool IO, bool /*ASM*/,
+                            bool bTrain, bool bLoadAndTrain,
+                            KFoldMode mode,
+                            double trainRatioForFixed,
+                            double holdoutRatioForTest,
+                            int H1, int H2, int H3)
 {
     arma::mat dataset;
     data::Load(dataFile, dataset, true);
@@ -268,11 +243,12 @@ void TrainKFold_Impl(const std::string& dataFile,
 
         if (trainData.n_cols <= (size_t)rho || valData.n_cols <= (size_t)rho)
         {
-            cout << "[Skip] Fold " << (fold + 1) << " too small for rho=" << rho << ".\n";
+            cout << "[Skip] Fold " << (fold + 1)
+                 << " too small for rho=" << rho << ".\n";
             continue;
         }
 
-        data::MinMaxScaler scale;
+        MinMaxScaler scale;
         scale.Fit(trainData);
         scale.Transform(trainData, trainData);
         scale.Transform(valData, valData);
@@ -284,6 +260,8 @@ void TrainKFold_Impl(const std::string& dataFile,
 
         CreateTimeSeriesData(trainData, trainX, trainY, rho, (int)inputSize, (int)outputSize, IO);
         CreateTimeSeriesData(valData, valX, valY, rho, (int)inputSize, (int)outputSize, IO);
+
+        ValidateShapes(trainData, trainX, trainY, inputSize, outputSize, rho);
 
         RNN<MeanSquaredError, HeInitialization> model(rho);
         model.Add<Linear>(inputSize);
@@ -317,10 +295,9 @@ void TrainKFold_Impl(const std::string& dataFile,
     cout << "Val MSE = " << arma::mean(arma::vec(mseValList))
          << ", R² = " << arma::mean(arma::vec(r2ValList)) << endl;
 
-    // === Final retrain ===
     cout << "\nRetraining final model on full (train+val) dataset...\n";
 
-    data::MinMaxScaler fullScale;
+    MinMaxScaler fullScale;
     fullScale.Fit(trainValData);
     fullScale.Transform(trainValData, trainValData);
     fullScale.Transform(testData, testData);
@@ -332,6 +309,7 @@ void TrainKFold_Impl(const std::string& dataFile,
 
     CreateTimeSeriesData(trainValData, trainX, trainY, rho, (int)inputSize, (int)outputSize, IO);
     CreateTimeSeriesData(testData, testX, testY, rho, (int)inputSize, (int)outputSize, IO);
+    ValidateShapes(trainValData, trainX, trainY, inputSize, outputSize, rho);
 
     RNN<MeanSquaredError, HeInitialization> modelFinal(rho);
     modelFinal.Add<Linear>(inputSize);
@@ -366,10 +344,9 @@ void TrainKFold_Impl(const std::string& dataFile,
     cout << "\n✅ TrainKFold completed successfully.\n";
 }
 
-
-// ============================================================================================
-// Public wrappers
-// ============================================================================================
+/* ============================================================
+ *                  Public Wrappers
+ * ============================================================ */
 
 void TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
