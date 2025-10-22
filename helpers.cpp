@@ -1,19 +1,26 @@
+/**
+ * @file helpers.cpp
+ * @brief Implementation of LSTM Wrapper utility functions.
+ *
+ * Includes shape validation, metric evaluation, inverse scaling,
+ * configuration logging, and K-Fold validation utilities.
+ *
+ * @authors
+ *   Behzad Shakouri
+ *   Arash Massoudieh
+ */
+
 #include "helpers.h"
-#include <armadillo>
 #include <iostream>
-#include <string>
+#include <sstream>
+#include <QDebug>
 
-#include <pch.h>       // must come first
-#include "helpers.h"
-
-using namespace mlpack;
-using namespace mlpack::ann;
-using namespace mlpack::data;
-using namespace ens;
 using namespace std;
+using namespace mlpack;
+using namespace mlpack::data;
 
 /* ============================================================
- *                Shape Validator (Debug Utility)
+ *                Shape Validation
  * ============================================================ */
 void ValidateShapes(const arma::mat& dataset,
                     const arma::cube& X,
@@ -28,32 +35,15 @@ void ValidateShapes(const arma::mat& dataset,
     cout << "Y cube : " << Y.n_rows << "x" << Y.n_cols << "x" << Y.n_slices << endl;
     cout << "inputSize=" << inputSize << "  outputSize=" << outputSize
          << "  rho=" << rho << endl;
-
-    if (dataset.n_rows < inputSize)
-        cerr << "⚠️  Dataset rows (" << dataset.n_rows
-             << ") < inputSize (" << inputSize << "). Check your data layout.\n";
-
-    if (Y.n_rows != outputSize)
-        cerr << "⚠️  Y cube row mismatch: expected " << outputSize
-             << ", got " << Y.n_rows << endl;
-
-    if (X.n_cols != Y.n_cols)
-        cerr << "⚠️  Column mismatch between X and Y cubes: "
-             << X.n_cols << " vs " << Y.n_cols << endl;
-
-    if (X.n_slices != Y.n_slices)
-        cerr << "⚠️  Slice mismatch between X and Y cubes: "
-             << X.n_slices << " vs " << Y.n_slices << endl;
-
     cout << "==============================================\n";
 }
 
 /* ============================================================
- *                Metric Evaluation
+ *                Metric Computation
  * ============================================================ */
 double ComputeMSE(arma::cube& pred, arma::cube& Y)
 {
-    return mlpack::metric::SquaredEuclideanDistance::Evaluate(pred, Y) / (Y.n_elem);
+    return mlpack::metric::SquaredEuclideanDistance::Evaluate(pred, Y) / Y.n_elem;
 }
 
 double ComputeR2(arma::cube& pred, arma::cube& Y)
@@ -61,18 +51,15 @@ double ComputeR2(arma::cube& pred, arma::cube& Y)
     arma::vec yTrue = arma::vectorise(Y);
     arma::vec yPred = arma::vectorise(pred);
 
-    double ss_res = arma::accu(arma::square(yTrue - yPred));
-    double mean_y = arma::mean(yTrue);
-    double ss_tot = arma::accu(arma::square(yTrue - mean_y));
+    const double ss_res = arma::accu(arma::square(yTrue - yPred));
+    const double mean_y = arma::mean(yTrue);
+    const double ss_tot = arma::accu(arma::square(yTrue - mean_y));
 
-    if (ss_tot == 0.0)
-        return 0.0;
-
-    return 1.0 - (ss_res / ss_tot);
+    return (ss_tot == 0.0) ? 0.0 : 1.0 - (ss_res / ss_tot);
 }
 
 /* ============================================================
- *                Safe SaveResults() with Debug Logging
+ *                SaveResults (CSV Export + Inverse Scaling)
  * ============================================================ */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
@@ -84,131 +71,119 @@ void SaveResults(const std::string& filename,
 {
     cout << "\n========== [SaveResults Debug Info] ==========\n";
 
-    // Extract last slices
-    arma::mat xSlice = IOData.slice(IOData.n_slices - 1);           // features (e.g. 9×N)
-    arma::mat yPred  = predictions.slice(predictions.n_slices - 1); // outputs (e.g. 1×N)
+    arma::mat xSlice = IOData.slice(IOData.n_slices - 1);
+    arma::mat yPred  = predictions.slice(predictions.n_slices - 1);
 
     cout << "xSlice size: " << xSlice.n_rows << "x" << xSlice.n_cols << endl;
     cout << "yPred  size: " << yPred.n_rows  << "x" << yPred.n_cols  << endl;
 
-    const arma::uword N = xSlice.n_cols;
-
-    // --- Build combined block matching the scaler's Fit() layout ---
     arma::mat combined;
     if (!IO)
     {
-        // Training likely used full dataset [inputs; outputs]
-        combined.set_size(inputSize + outputSize, N);
+        combined.set_size(inputSize + outputSize, xSlice.n_cols);
         combined.rows(0, inputSize - 1) = xSlice;
         combined.rows(inputSize, inputSize + outputSize - 1) = yPred;
     }
     else
     {
-        // IO layout: outputs occupy last outputSize rows of input block
-        combined.set_size(inputSize, N);
+        combined.set_size(inputSize, xSlice.n_cols);
         combined.rows(0, inputSize - outputSize - 1) = xSlice.rows(0, inputSize - outputSize - 1);
         combined.rows(inputSize - outputSize, inputSize - 1) = yPred;
     }
 
     cout << "Combined pre-inverse size: " << combined.n_rows << "x" << combined.n_cols << endl;
 
-    // --- Inverse-transform full combined block safely ---
-    bool inverseOk = true;
-    try {
+    try
+    {
         scale.InverseTransform(combined, combined);
-    } catch (const std::exception& e) {
-        inverseOk = false;
-        cout << "⚠️  InverseTransform(combined) failed: " << e.what()
-             << "  -> Saving scaled values instead.\n";
+    }
+    catch (const std::exception& e)
+    {
+        cout << "⚠️  InverseTransform failed (" << e.what() << "). Saving scaled values instead.\n";
     }
 
-    // --- Split back inputs and predictions ---
-    arma::mat X_inv, Yhat_inv;
-    if (!IO)
-    {
-        X_inv    = combined.rows(0, inputSize - 1);
-        Yhat_inv = combined.rows(inputSize, inputSize + outputSize - 1);
-    }
-    else
-    {
-        X_inv    = combined.rows(0, inputSize - 1);
-        Yhat_inv = combined.rows(inputSize - outputSize, inputSize - 1);
-    }
-
-    // --- Pad predictions for CSV layout AFTER inverse-transform ---
-    arma::mat predBlock = Yhat_inv;  // outputSize×N
-    if (!IO)
-        predBlock.insert_rows(0, inputSize, 0.0);       // Non-IO: prepend full input block
-    else
-        predBlock.insert_rows(0, inputSize - outputSize, 0.0);
-
-    // --- Merge blocks and save ---
-    predBlock.insert_cols(0, 1, true);                  // blank leading column
-    arma::mat table = X_inv;                            // start with inputs
-    table.insert_cols(table.n_cols, 1, true);           // blank trailing column
-
-    // Append predicted outputs as bottom rows
-    table.insert_rows(
-        table.n_rows,
-        predBlock.rows(predBlock.n_rows - outputSize, predBlock.n_rows - 1)
-    );
-
-    // Align columns if mismatch
-    if (table.n_cols != predBlock.n_cols)
-    {
-        arma::uword minCols = std::min(table.n_cols, predBlock.n_cols);
-        cout << "⚠️  Column mismatch. Truncating to " << minCols << " columns.\n";
-        table     = table.cols(0, minCols - 1);
-        predBlock = predBlock.cols(0, minCols - 1);
-    }
-
-    // --- Save to CSV ---
-    if (!mlpack::data::Save(filename, table))
-    {
+    if (!mlpack::data::Save(filename, combined))
         cerr << "❌ Error: Failed to save results to " << filename << endl;
-        return;
-    }
+    else
+        cout << "✅ Saved predictions to: " << filename << endl;
 
-    cout << "✅ Saved predictions to: " << filename << endl;
-    cout << "Predicted output values (last " << outputSize << " rows):\n";
-    for (int i = outputSize - 1; i >= 0; --i)
-    {
-        cout << " (" << table(table.n_rows - outputSize + i,
-                               table.n_cols - 1) << ") " << endl;
-    }
     cout << "==============================================\n";
 }
 
 /* ============================================================
- *                Time-Series Data Builder
+ *                Mode & Config Utilities
  * ============================================================ */
-void CreateTimeSeriesData(const arma::mat& dataset,
-                          arma::cube& X, arma::cube& y,
-                          size_t rho, size_t inputSize,
-                          size_t outputSize, bool IO)
+std::string ModeName(int kfoldMode)
 {
-    if (!IO)
+    switch (kfoldMode)
     {
-        for (size_t i = 0; i < dataset.n_cols - rho; ++i)
+        case 0: return "Random";
+        case 1: return "TimeSeries";
+        case 2: return "FixedRatio";
+        default: return "Unknown";
+    }
+}
+
+void ValidateConfigOrWarn(int mode, int kfoldMode, int& KFOLDS,
+                          double& trainRatio, double& testHoldout)
+{
+    if (mode == 1)
+    {
+        if (KFOLDS < 2)
         {
-            X.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(0, inputSize - 1),
-                               arma::span(i, i + rho - 1));
-            y.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(inputSize, inputSize + outputSize - 1),
-                               arma::span(i + 1, i + rho));
+            qWarning() << "[Config] KFOLDS < 2; forcing KFOLDS=2.";
+            KFOLDS = 2;
+        }
+
+        if (kfoldMode == 2 && !(trainRatio > 0.0 && trainRatio < 1.0))
+        {
+            const double suggested = static_cast<double>(KFOLDS - 1) / KFOLDS;
+            qWarning() << "[Config] Invalid trainRatio. Setting to" << suggested;
+            trainRatio = suggested;
         }
     }
-    else
+
+    if (!(testHoldout > 0.0 && testHoldout < 1.0))
     {
-        for (size_t i = 0; i < dataset.n_cols - rho; ++i)
-        {
-            X.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(0, inputSize - 1),
-                               arma::span(i, i + rho - 1));
-            y.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(inputSize - outputSize, inputSize - 1),
-                               arma::span(i + 1, i + rho));
-        }
+        qWarning() << "[Config] testHoldout invalid. Forcing 0.3.";
+        testHoldout = 0.3;
     }
+}
+
+/* ============================================================
+ *                Run Configuration Logger
+ * ============================================================ */
+void PrintRunConfig(bool ASM, bool IO, bool bTrain, bool bLoadAndTrain,
+                    size_t inputSize, size_t outputSize, int rho,
+                    double stepSize, size_t epochs, size_t batchSize,
+                    int H1, int H2, int H3,
+                    int mode, int kfoldMode, int KFOLDS,
+                    double trainRatio, double testHoldout,
+                    const std::string& dataFile,
+                    const std::string& modelFile,
+                    const std::string& predFile_Test,
+                    const std::string& predFile_Train)
+{
+    std::ostringstream sig;
+    sig << "LSTM[H1=" << H1 << ",H2=" << H2 << ",H3=" << H3 << "] "
+        << "Inp=" << inputSize << " Out=" << outputSize
+        << " rho=" << rho
+        << " | LR=" << std::scientific << stepSize
+        << " Ep=" << std::defaultfloat << epochs
+        << " B=" << batchSize;
+
+    qInfo() << "------------------- Run Configuration -------------------";
+    qInfo() << "ASM=" << ASM << " | IO=" << IO
+            << " | Train=" << bTrain << " | LoadAndTrain=" << bLoadAndTrain;
+    qInfo() << "Signature:" << sig.str().c_str();
+    qInfo() << "Mode=" << mode << " (0=Single,1=KFold)"
+            << " | KFoldMode=" << kfoldMode << "(" << ModeName(kfoldMode).c_str() << ")"
+            << " | KFOLDS=" << KFOLDS;
+    qInfo() << "Ratios: trainRatio=" << trainRatio << " | testHoldout=" << testHoldout;
+    qInfo() << "Files:";
+    qInfo() << "  dataFile      =" << dataFile.c_str();
+    qInfo() << "  modelFile     =" << modelFile.c_str();
+    qInfo() << "  predFile_Test =" << predFile_Test.c_str();
+    qInfo() << "  predFile_Train=" << predFile_Train.c_str();
+    qInfo() << "----------------------------------------------------------";
 }

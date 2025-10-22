@@ -1,3 +1,17 @@
+/**
+ * @file train_modes.cpp
+ * @brief Implements training modes for LSTM Wrapper, including single run and
+ *        K-Fold (Random, TimeSeries, FixedRatio) training.
+ *
+ * Provides reusable core routines for model setup, normalization, time-series
+ * cube generation, training, and validation. Supports configurable number of
+ * folds and modes for robust performance analysis on ASM-type datasets.
+ *
+ * @authors
+ *   Behzad Shakouri
+ *   Arash Massoudieh
+ */
+
 #include <pch.h>       // must come first
 #include "helpers.h"
 #include "train_modes.h"
@@ -17,10 +31,23 @@ using namespace ens;
  *                  Splitters (Random / TimeSeries / FixedRatio)
  * ============================================================ */
 
-static auto KFoldSplit(const arma::mat& data,
-                       const arma::mat& labels,
-                       size_t k,
-                       size_t fold)
+/**
+ * @brief Perform standard K-Fold random split.
+ *
+ * @param data Input dataset matrix.
+ * @param labels Output/label matrix.
+ * @param k Number of folds.
+ * @param fold Index of the current fold (0-based).
+ * @return Pair of (trainData, trainLabels) and (valData, valLabels).
+ * @throws std::invalid_argument If fold index is invalid or k = 0.
+ */
+static std::pair<
+    std::pair<arma::mat, arma::mat>,
+    std::pair<arma::mat, arma::mat>
+> KFoldSplit(const arma::mat& data,
+             const arma::mat& labels,
+             size_t k,
+             size_t fold)
 {
     if (k == 0 || fold >= k)
         throw std::invalid_argument("KFoldSplit: invalid fold or k.");
@@ -30,17 +57,54 @@ static auto KFoldSplit(const arma::mat& data,
     const size_t start = fold * foldSize;
     const size_t end   = (fold == k - 1) ? n : start + foldSize;
 
-    arma::uvec valIdx  = arma::regspace<arma::uvec>(start, end - 1);
-    arma::uvec mask    = arma::ones<arma::uvec>(n);
+    cout << "DEBUG[KFoldSplit] n=" << n << " foldSize=" << foldSize
+         << " start=" << start << " end=" << end << endl;
+
+    // Defensive checks
+    if (end <= start || foldSize < 2)
+    {
+        cerr << "[Warn] Fold " << fold
+             << " invalid (start=" << start << ", end=" << end
+             << ", foldSize=" << foldSize << "). Returning full dataset.\n";
+        return std::make_pair(
+            std::make_pair(data, labels),
+            std::make_pair(data, labels)
+        );
+    }
+
+    arma::uvec valIdx = arma::regspace<arma::uvec>(start, end - 1);
+    arma::uvec mask   = arma::ones<arma::uvec>(n);
     mask(valIdx).zeros();
     arma::uvec trainIdx = arma::find(mask == 1);
 
-    return make_pair(
-        make_pair(data.cols(trainIdx), labels.cols(trainIdx)),
-        make_pair(data.cols(valIdx), labels.cols(valIdx))
+    if (trainIdx.is_empty() || valIdx.is_empty())
+    {
+        cerr << "[Warn] Empty index set for fold " << fold << endl;
+        return std::make_pair(
+            std::make_pair(data, labels),
+            std::make_pair(data, labels)
+        );
+    }
+
+    // Use .eval() to convert subviews to arma::mat and keep consistent return type
+    return std::make_pair(
+        std::make_pair(data.cols(trainIdx).eval(), labels.cols(trainIdx).eval()),
+        std::make_pair(data.cols(valIdx).eval(), labels.cols(valIdx).eval())
     );
 }
 
+/**
+ * @brief Perform time-series K-Fold split (no random shuffling).
+ *
+ * Preserves chronological order by selecting the first portion for training
+ * and the following segment for validation.
+ *
+ * @param data Input dataset.
+ * @param labels Output labels.
+ * @param k Number of folds.
+ * @param fold Current fold index.
+ * @return Pair of (trainData, trainLabels) and (valData, valLabels).
+ */
 static auto KFoldSplit_TimeSeries(const arma::mat& data,
                                   const arma::mat& labels,
                                   size_t k,
@@ -62,6 +126,18 @@ static auto KFoldSplit_TimeSeries(const arma::mat& data,
     );
 }
 
+/**
+ * @brief Perform Fixed-Ratio split within K-Fold validation.
+ *
+ * Uses a specified ratio of data for training and the remaining fraction for validation.
+ *
+ * @param data Input dataset.
+ * @param labels Output labels.
+ * @param k Number of folds.
+ * @param fold Current fold index.
+ * @param trainRatio Ratio of training data (0–1).
+ * @return Pair of (trainData, trainLabels) and (valData, valLabels).
+ */
 static auto KFoldSplit_FixedRatio(const arma::mat& data,
                                   const arma::mat& labels,
                                   size_t k,
@@ -91,6 +167,12 @@ static auto KFoldSplit_FixedRatio(const arma::mat& data,
  *                  Core Training Function
  * ============================================================ */
 
+/**
+ * @brief Core LSTM training routine shared by all modes.
+ *
+ * Handles scaling, data preparation, model creation/loading, training,
+ * and evaluation for both single and K-Fold configurations.
+ */
 static void TrainCore(arma::mat& trainData,
                       arma::mat& testData,
                       const std::string& modelFile,
@@ -170,6 +252,14 @@ static void TrainCore(arma::mat& trainData,
  *                  Single Train/Test Mode
  * ============================================================ */
 
+/**
+ * @brief Execute standard single-train/test LSTM training.
+ *
+ * @param dataFile Path to dataset.
+ * @param modelFile Path to save trained model.
+ * @param predFile_Test Path to save test predictions.
+ * @param predFile_Train Path to save train predictions.
+ */
 void TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,
                  const std::string& predFile_Test,
@@ -198,6 +288,9 @@ void TrainSingle(const std::string& dataFile,
  *                  K-Fold Mode (with selector)
  * ============================================================ */
 
+/**
+ * @brief Implementation for configurable K-Fold cross-validation training.
+ */
 static void TrainKFold_Impl(const std::string& dataFile,
                             const std::string& modelFile,
                             const std::string& predFile_Test,
@@ -252,6 +345,12 @@ static void TrainKFold_Impl(const std::string& dataFile,
         scale.Fit(trainData);
         scale.Transform(trainData, trainData);
         scale.Transform(valData, valData);
+
+        cout << "DEBUG: trainData=" << trainData.n_rows << "x" << trainData.n_cols
+             << ", valData=" << valData.n_rows << "x" << valData.n_cols
+             << ", rho=" << rho
+             << ", inputSize=" << inputSize
+             << ", outputSize=" << outputSize << endl;
 
         arma::cube trainX(inputSize, trainData.n_cols - rho, rho);
         arma::cube trainY(outputSize, trainData.n_cols - rho, rho);
@@ -348,6 +447,9 @@ static void TrainKFold_Impl(const std::string& dataFile,
  *                  Public Wrappers
  * ============================================================ */
 
+/**
+ * @brief Default K-Fold training using forward-chaining (TimeSeries) mode.
+ */
 void TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
                 const std::string& predFile_Test,
@@ -367,6 +469,9 @@ void TrainKFold(const std::string& dataFile,
                     H1, H2, H3);
 }
 
+/**
+ * @brief Extended K-Fold training with selectable mode and ratios.
+ */
 void TrainKFold_WithMode(const std::string& dataFile,
                          const std::string& modelFile,
                          const std::string& predFile_Test,
@@ -381,7 +486,7 @@ void TrainKFold_WithMode(const std::string& dataFile,
 {
     KFoldMode mode = (modeInt == 0) ? KFoldMode::Random :
                      (modeInt == 1) ? KFoldMode::TimeSeries :
-                     KFoldMode::FixedRatio;
+                                       KFoldMode::FixedRatio;
 
     TrainKFold_Impl(dataFile, modelFile, predFile_Test, predFile_Train,
                     inputSize, outputSize, rho, kfolds,
