@@ -69,8 +69,8 @@ int main()
     static std::string path = "./"; ///< Fallback: current working directory
 #endif
 
-    std::string data_name = "sCOD"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
-    std::string dataFile       = path + "Data/observedoutput_t10&11_" + data_name + ".txt";
+    std::string data_name = "NO"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
+    std::string dataFile       = path + "Data/observedoutput_" + data_name + ".txt";
     std::string modelFile      = path + "Results/lstm_multi.bin";
     std::string predFile_Test  = path + "Results/lstm_multi_predictions_test.csv";
     std::string predFile_Train = path + "Results/lstm_multi_predictions_train.csv";
