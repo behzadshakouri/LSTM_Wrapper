@@ -1,7 +1,7 @@
 /**
  * @file train_modes.cpp
  * @brief Implements training modes for LSTM Wrapper, including single run and
- *        K-Fold (Random, TimeSeries, FixedRatio) training.
+ *        K-Fold (Random, TimeSeries, FixedRatio) training with parametric  optimizer.
  *
  * Provides reusable core routines for model setup, normalization, time-series
  * cube generation, training, and validation. Supports configurable number of
@@ -31,16 +31,6 @@ using namespace ens;
  *                  Splitters (Random / TimeSeries / FixedRatio)
  * ============================================================ */
 
-/**
- * @brief Perform standard K-Fold random split.
- *
- * @param data Input dataset matrix.
- * @param labels Output/label matrix.
- * @param k Number of folds.
- * @param fold Index of the current fold (0-based).
- * @return Pair of (trainData, trainLabels) and (valData, valLabels).
- * @throws std::invalid_argument If fold index is invalid or k = 0.
- */
 static std::pair<
     std::pair<arma::mat, arma::mat>,
     std::pair<arma::mat, arma::mat>
@@ -57,54 +47,17 @@ static std::pair<
     const size_t start = fold * foldSize;
     const size_t end   = (fold == k - 1) ? n : start + foldSize;
 
-    cout << "DEBUG[KFoldSplit] n=" << n << " foldSize=" << foldSize
-         << " start=" << start << " end=" << end << endl;
-
-    // Defensive checks
-    if (end <= start || foldSize < 2)
-    {
-        cerr << "[Warn] Fold " << fold
-             << " invalid (start=" << start << ", end=" << end
-             << ", foldSize=" << foldSize << "). Returning full dataset.\n";
-        return std::make_pair(
-            std::make_pair(data, labels),
-            std::make_pair(data, labels)
-        );
-    }
-
     arma::uvec valIdx = arma::regspace<arma::uvec>(start, end - 1);
     arma::uvec mask   = arma::ones<arma::uvec>(n);
     mask(valIdx).zeros();
     arma::uvec trainIdx = arma::find(mask == 1);
 
-    if (trainIdx.is_empty() || valIdx.is_empty())
-    {
-        cerr << "[Warn] Empty index set for fold " << fold << endl;
-        return std::make_pair(
-            std::make_pair(data, labels),
-            std::make_pair(data, labels)
-        );
-    }
-
-    // Use .eval() to convert subviews to arma::mat and keep consistent return type
     return std::make_pair(
         std::make_pair(data.cols(trainIdx).eval(), labels.cols(trainIdx).eval()),
         std::make_pair(data.cols(valIdx).eval(), labels.cols(valIdx).eval())
     );
 }
 
-/**
- * @brief Perform time-series K-Fold split (no random shuffling).
- *
- * Preserves chronological order by selecting the first portion for training
- * and the following segment for validation.
- *
- * @param data Input dataset.
- * @param labels Output labels.
- * @param k Number of folds.
- * @param fold Current fold index.
- * @return Pair of (trainData, trainLabels) and (valData, valLabels).
- */
 static auto KFoldSplit_TimeSeries(const arma::mat& data,
                                   const arma::mat& labels,
                                   size_t k,
@@ -126,18 +79,6 @@ static auto KFoldSplit_TimeSeries(const arma::mat& data,
     );
 }
 
-/**
- * @brief Perform Fixed-Ratio split within K-Fold validation.
- *
- * Uses a specified ratio of data for training and the remaining fraction for validation.
- *
- * @param data Input dataset.
- * @param labels Output labels.
- * @param k Number of folds.
- * @param fold Current fold index.
- * @param trainRatio Ratio of training data (0–1).
- * @return Pair of (trainData, trainLabels) and (valData, valLabels).
- */
 static auto KFoldSplit_FixedRatio(const arma::mat& data,
                                   const arma::mat& labels,
                                   size_t k,
@@ -167,12 +108,6 @@ static auto KFoldSplit_FixedRatio(const arma::mat& data,
  *                  Core Training Function
  * ============================================================ */
 
-/**
- * @brief Core LSTM training routine shared by all modes.
- *
- * Handles scaling, data preparation, model creation/loading, training,
- * and evaluation for both single and K-Fold configurations.
- */
 static void TrainCore(arma::mat& trainData,
                       arma::mat& testData,
                       const std::string& modelFile,
@@ -182,7 +117,9 @@ static void TrainCore(arma::mat& trainData,
                       int rho, double stepSize, size_t epochs,
                       size_t batchSize, bool IO,
                       bool bTrain, bool bLoadAndTrain,
-                      int H1, int H2, int H3)
+                      int H1, int H2, int H3,
+                      double beta1, double beta2,
+                      double epsilon, double tolerance, bool shuffle)
 {
     MinMaxScaler scale;
     scale.Fit(trainData);
@@ -218,9 +155,15 @@ static void TrainCore(arma::mat& trainData,
             model.Add<Linear>(outputSize);
         }
 
-        Adam optimizer(stepSize, batchSize, 0.9, 0.999, 1e-8,
-                       trainData.n_cols * epochs, 1e-8, true);
-        optimizer.Tolerance() = -1;
+        cout << "Adam optimizer settings: β1=" << beta1
+             << ", β2=" << beta2
+             << ", ε=" << epsilon
+             << ", Tol=" << tolerance
+             << ", Shuffle=" << std::boolalpha << shuffle << endl;
+
+        Adam optimizer(stepSize, batchSize, beta1, beta2, epsilon,
+                       trainData.n_cols * epochs, tolerance, shuffle);
+        optimizer.Tolerance() = tolerance;
 
         cout << "Training ..." << endl;
         model.Train(trainX, trainY, optimizer,
@@ -252,14 +195,6 @@ static void TrainCore(arma::mat& trainData,
  *                  Single Train/Test Mode
  * ============================================================ */
 
-/**
- * @brief Execute standard single-train/test LSTM training.
- *
- * @param dataFile Path to dataset.
- * @param modelFile Path to save trained model.
- * @param predFile_Test Path to save test predictions.
- * @param predFile_Train Path to save train predictions.
- */
 void TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,
                  const std::string& predFile_Test,
@@ -269,7 +204,9 @@ void TrainSingle(const std::string& dataFile,
                  double stepSize, size_t epochs,
                  size_t batchSize, bool IO, bool /*ASM*/,
                  bool bTrain, bool bLoadAndTrain,
-                 int H1, int H2, int H3)
+                 int H1, int H2, int H3,
+                 double beta1, double beta2,
+                 double epsilon, double tolerance, bool shuffle)
 {
     arma::mat dataset;
     data::Load(dataFile, dataset, true);
@@ -281,16 +218,14 @@ void TrainSingle(const std::string& dataFile,
     TrainCore(trainData, testData, modelFile, predFile_Test, predFile_Train,
               inputSize, outputSize, rho, stepSize, epochs,
               batchSize, IO, bTrain, bLoadAndTrain,
-              H1, H2, H3);
+              H1, H2, H3,
+              beta1, beta2, epsilon, tolerance, shuffle);
 }
 
 /* ============================================================
  *                  K-Fold Mode (with selector)
  * ============================================================ */
 
-/**
- * @brief Implementation for configurable K-Fold cross-validation training.
- */
 static void TrainKFold_Impl(const std::string& dataFile,
                             const std::string& modelFile,
                             const std::string& predFile_Test,
@@ -303,7 +238,9 @@ static void TrainKFold_Impl(const std::string& dataFile,
                             KFoldMode mode,
                             double trainRatioForFixed,
                             double holdoutRatioForTest,
-                            int H1, int H2, int H3)
+                            int H1, int H2, int H3,
+                            double beta1, double beta2,
+                            double epsilon, double tolerance, bool shuffle)
 {
     arma::mat dataset;
     data::Load(dataFile, dataset, true);
@@ -331,26 +268,10 @@ static void TrainKFold_Impl(const std::string& dataFile,
         arma::mat trainData = parts.first.first;
         arma::mat valData   = parts.second.first;
 
-        cout << "Train cols: " << trainData.n_cols
-             << " | Val cols: " << valData.n_cols << endl;
-
-        if (trainData.n_cols <= (size_t)rho || valData.n_cols <= (size_t)rho)
-        {
-            cout << "[Skip] Fold " << (fold + 1)
-                 << " too small for rho=" << rho << ".\n";
-            continue;
-        }
-
         MinMaxScaler scale;
         scale.Fit(trainData);
         scale.Transform(trainData, trainData);
         scale.Transform(valData, valData);
-
-        cout << "DEBUG: trainData=" << trainData.n_rows << "x" << trainData.n_cols
-             << ", valData=" << valData.n_rows << "x" << valData.n_cols
-             << ", rho=" << rho
-             << ", inputSize=" << inputSize
-             << ", outputSize=" << outputSize << endl;
 
         arma::cube trainX(inputSize, trainData.n_cols - rho, rho);
         arma::cube trainY(outputSize, trainData.n_cols - rho, rho);
@@ -360,8 +281,6 @@ static void TrainKFold_Impl(const std::string& dataFile,
         CreateTimeSeriesData(trainData, trainX, trainY, rho, (int)inputSize, (int)outputSize, IO);
         CreateTimeSeriesData(valData, valX, valY, rho, (int)inputSize, (int)outputSize, IO);
 
-        ValidateShapes(trainData, trainX, trainY, inputSize, outputSize, rho);
-
         RNN<MeanSquaredError, HeInitialization> model(rho);
         model.Add<Linear>(inputSize);
         model.Add<LSTM>(H1);
@@ -370,9 +289,9 @@ static void TrainKFold_Impl(const std::string& dataFile,
         model.Add<ReLU>();
         model.Add<Linear>(outputSize);
 
-        Adam optimizer(stepSize, batchSize, 0.9, 0.999, 1e-8,
-                       trainData.n_cols * epochs, 1e-8, true);
-        optimizer.Tolerance() = -1;
+        Adam optimizer(stepSize, batchSize, beta1, beta2, epsilon,
+                       trainData.n_cols * epochs, tolerance, shuffle);
+        optimizer.Tolerance() = tolerance;
 
         model.Train(trainX, trainY, optimizer,
                     PrintLoss(), ProgressBar(), EarlyStopAtMinLoss());
@@ -408,7 +327,6 @@ static void TrainKFold_Impl(const std::string& dataFile,
 
     CreateTimeSeriesData(trainValData, trainX, trainY, rho, (int)inputSize, (int)outputSize, IO);
     CreateTimeSeriesData(testData, testX, testY, rho, (int)inputSize, (int)outputSize, IO);
-    ValidateShapes(trainValData, trainX, trainY, inputSize, outputSize, rho);
 
     RNN<MeanSquaredError, HeInitialization> modelFinal(rho);
     modelFinal.Add<Linear>(inputSize);
@@ -418,9 +336,9 @@ static void TrainKFold_Impl(const std::string& dataFile,
     modelFinal.Add<ReLU>();
     modelFinal.Add<Linear>(outputSize);
 
-    Adam optimizerFinal(stepSize, batchSize, 0.9, 0.999, 1e-8,
-                        trainValData.n_cols * epochs, 1e-8, true);
-    optimizerFinal.Tolerance() = -1;
+    Adam optimizerFinal(stepSize, batchSize, beta1, beta2, epsilon,
+                        trainValData.n_cols * epochs, tolerance, shuffle);
+    optimizerFinal.Tolerance() = tolerance;
 
     modelFinal.Train(trainX, trainY, optimizerFinal,
                      PrintLoss(), ProgressBar(), EarlyStopAtMinLoss());
@@ -439,7 +357,6 @@ static void TrainKFold_Impl(const std::string& dataFile,
     SaveResults(predFile_Test, predTestFull, fullScale, testX, (int)inputSize, (int)outputSize, IO);
 
     data::Save(modelFile, "LSTMMulti", modelFinal);
-    cout << "[Saved] Final model: " << modelFile << endl;
     cout << "\n✅ TrainKFold completed successfully.\n";
 }
 
@@ -447,9 +364,6 @@ static void TrainKFold_Impl(const std::string& dataFile,
  *                  Public Wrappers
  * ============================================================ */
 
-/**
- * @brief Default K-Fold training using forward-chaining (TimeSeries) mode.
- */
 void TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
                 const std::string& predFile_Test,
@@ -459,19 +373,19 @@ void TrainKFold(const std::string& dataFile,
                 double stepSize, size_t epochs,
                 size_t batchSize, bool IO, bool ASM,
                 bool bTrain, bool bLoadAndTrain,
-                int H1, int H2, int H3)
+                int H1, int H2, int H3,
+                double beta1, double beta2,
+                double epsilon, double tolerance, bool shuffle)
 {
     TrainKFold_Impl(dataFile, modelFile, predFile_Test, predFile_Train,
                     inputSize, outputSize, rho, kfolds,
                     stepSize, epochs, batchSize, IO, ASM,
                     bTrain, bLoadAndTrain,
                     KFoldMode::TimeSeries, 0.9, 0.3,
-                    H1, H2, H3);
+                    H1, H2, H3,
+                    beta1, beta2, epsilon, tolerance, shuffle);
 }
 
-/**
- * @brief Extended K-Fold training with selectable mode and ratios.
- */
 void TrainKFold_WithMode(const std::string& dataFile,
                          const std::string& modelFile,
                          const std::string& predFile_Test,
@@ -482,7 +396,9 @@ void TrainKFold_WithMode(const std::string& dataFile,
                          size_t batchSize, bool IO, bool ASM,
                          bool bTrain, bool bLoadAndTrain,
                          int modeInt, double trainRatio, double testHoldout,
-                         int H1, int H2, int H3)
+                         int H1, int H2, int H3,
+                         double beta1, double beta2,
+                         double epsilon, double tolerance, bool shuffle)
 {
     KFoldMode mode = (modeInt == 0) ? KFoldMode::Random :
                      (modeInt == 1) ? KFoldMode::TimeSeries :
@@ -493,5 +409,6 @@ void TrainKFold_WithMode(const std::string& dataFile,
                     stepSize, epochs, batchSize, IO, ASM,
                     bTrain, bLoadAndTrain,
                     mode, trainRatio, testHoldout,
-                    H1, H2, H3);
+                    H1, H2, H3,
+                    beta1, beta2, epsilon, tolerance, shuffle);
 }

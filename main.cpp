@@ -25,7 +25,7 @@ using namespace ens;
 /**
  * @brief Main entry point of the LSTM Wrapper program.
  *
- * Defines network architecture, training parameters, and dataset paths,
+ * Defines network architecture, optimizer, and dataset configuration,
  * then calls either `TrainSingle()` or `TrainKFold_WithMode()` depending on
  * the selected mode.
  *
@@ -34,31 +34,40 @@ using namespace ens;
 int main()
 {
     // ------------------- Core Configuration -------------------
-    const bool ASM  = true;           ///< Enable ASM data
+    const bool ASM  = true;           ///< Enable ASM dataset format
     const bool IO   = false;          ///< Enable Input/Output overlap mode
-    const bool bTrain = true;         ///< Enable training
-    const bool bLoadAndTrain = false; ///< Load model and continue training
+    const bool bTrain = true;         ///< Train a new model
+    const bool bLoadAndTrain = false; ///< Continue training existing model
 
-    // --- Data configuration ---
+    // ------------------- Data Configuration -------------------
     const size_t inputSize  = 9;
     const size_t outputSize = 1;
-    const int rho           = 1;
-    const double STEP_SIZE  = 5e-5; // 5e-5
-    const size_t EPOCHS     = 1000; // 1000
-    const size_t BATCH_SIZE = 16;
+    const int rho           = 1;          ///< Sequence length (lag)
+    const double STEP_SIZE  = 5e-5;    ///< Learning rate
+    const size_t EPOCHS     = 1000;       ///< Training epochs
+    const size_t BATCH_SIZE = 16;         ///< Mini-batch size
 
-    // --- LSTM architecture ---
-    const int H1 = 10*4, H2 = 8*4, H3 = 7*4;
+    // ------------------- LSTM Architecture (Neurons) -------------------
+    const int H1 = 10 * 4;
+    const int H2 = 8  * 4;
+    const int H3 = 7  * 4;
 
-    // --- Mode and ratios ---
-    int mode = 0;        // 0 = single train/test, 1 = KFold cross-validation
-    int kfoldMode = 2;   // 0 = Random, 1 = TimeSeries, 2 = FixedRatio
+    // ------------------- Adam Optimizer Parameters -------------------
+    const double BETA1      = 0.9;     ///< Momentum for first moment
+    const double BETA2      = 0.999;   ///< Momentum for second moment
+    const double EPSILON    = 1e-8;    ///< Numerical stability constant
+    const double TOLERANCE  = 1e-7;    ///< Early-stop / convergence tolerance
+    const bool   SHUFFLE    = false;   ///< Keep order for time-series
+
+    // ------------------- Mode and Ratios -------------------
+    int mode = 0;          ///< 0 = single train/test, 1 = KFold cross-validation
+    int kfoldMode = 2;     ///< 0 = Random, 1 = TimeSeries, 2 = FixedRatio
     int KFOLDS = 10;
-    const double RATIO_SINGLE = 0.3;
+    const double RATIO_SINGLE = 0.3;   ///< 70% train / 30% test split for single mode
     double trainRatio  = static_cast<double>(KFOLDS - 1) / KFOLDS;
     double testHoldout = 0.3;
 
-    // --- File paths ---
+    // ------------------- File Paths -------------------
 #ifdef PowerEdge
     static std::string path = "/mnt/3rd900/Projects/LSTM_Wrapper/";
 #elif defined(Behzad)
@@ -94,7 +103,8 @@ int main()
                     inputSize, outputSize, rho, RATIO_SINGLE,
                     STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
                     bTrain, bLoadAndTrain,
-                    H1, H2, H3);
+                    H1, H2, H3,
+                    BETA1, BETA2, EPSILON, TOLERANCE, SHUFFLE);
     }
     else
     {
@@ -104,7 +114,8 @@ int main()
                             STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
                             bTrain, bLoadAndTrain,
                             kfoldMode, trainRatio, testHoldout,
-                            H1, H2, H3);
+                            H1, H2, H3,
+                            BETA1, BETA2, EPSILON, TOLERANCE, SHUFFLE);
     }
 
     qInfo() << "✅ Training process completed successfully.";
