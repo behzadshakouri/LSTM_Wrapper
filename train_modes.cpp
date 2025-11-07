@@ -121,11 +121,16 @@ static void TrainCore(arma::mat& trainData,
                       double epsilon, double tolerance,
                       bool shuffle, bool normalizeOutputs)
 {
-    // ------------------- Normalization -------------------
+    // ------------------- Normalization (Per-Variable) -------------------
     arma::rowvec mins, maxs;
-    FitMinMaxPerRow(trainData, mins, maxs, normalizeOutputs, inputSize, outputSize);
+
+    // Compute global per-variable min/max across both train and test
+    arma::mat fullData = arma::join_rows(trainData, testData);
+    FitMinMaxPerRow(fullData, mins, maxs, normalizeOutputs, inputSize, outputSize);
+
+    // Apply normalization using same scale for all partitions
     TransformMinMaxPerRow(trainData, mins, maxs, normalizeOutputs, inputSize, outputSize);
-    TransformMinMaxPerRow(testData , mins, maxs, normalizeOutputs, inputSize, outputSize);
+    TransformMinMaxPerRow(testData,  mins, maxs, normalizeOutputs, inputSize, outputSize);
 
     // ------------------- Time-Series Cube Preparation -------------------
     arma::cube trainX(inputSize, trainData.n_cols - rho, rho);

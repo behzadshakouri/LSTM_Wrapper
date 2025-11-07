@@ -16,22 +16,39 @@
 #pragma once
 #include <armadillo>
 #include <string>
-#include <pch.h>  // must come first
+#include <pch.h>  // must come first for mlpack linkage
 
 /* ============================================================
  *                Metric Evaluation
  * ============================================================ */
+
+/**
+ * @brief Compute Mean Squared Error (MSE) between predicted and observed cubes.
+ */
 double ComputeMSE(arma::cube& pred, arma::cube& Y);
+
+/**
+ * @brief Compute coefficient of determination (R²) between predicted and observed cubes.
+ */
 double ComputeR2(arma::cube& pred, arma::cube& Y);
 
 /* ============================================================
  *                Normalization (Per-Variable Min–Max)
  * ============================================================ */
+
 /**
- * @brief Compute per-variable (row-wise) min/max statistics on the training set.
+ * @brief Compute per-variable (row-wise) min/max from the entire dataset.
  *
- * Each variable is normalized independently, preventing cross-variable scale
- * coupling. If @p normalizeOutputs is false, output rows remain unscaled.
+ * Each variable (row) is scaled independently to [0,1] based on its own
+ * global range across all timesteps. If @p normalizeOutputs is false,
+ * output variables (after inputSize) are left unchanged.
+ *
+ * @param data             Input dataset (rows = variables, cols = timesteps)
+ * @param mins             Output: per-variable minima
+ * @param maxs             Output: per-variable maxima
+ * @param normalizeOutputs Whether to include output variables in scaling
+ * @param inputSize        Number of input features
+ * @param outputSize       Number of output features
  */
 void FitMinMaxPerRow(const arma::mat& data,
                      arma::rowvec& mins,
@@ -41,14 +58,14 @@ void FitMinMaxPerRow(const arma::mat& data,
                      size_t outputSize);
 
 /**
- * @brief Apply previously fitted per-variable min/max normalization.
+ * @brief Normalize dataset using stored per-variable min/max values.
  *
- * @param data Matrix to normalize
- * @param mins Stored minima per variable
- * @param maxs Stored maxima per variable
- * @param normalizeOutputs Whether to apply normalization to outputs
- * @param inputSize Number of input features
- * @param outputSize Number of output features
+ * @param data             Matrix to normalize
+ * @param mins             Stored minima per variable
+ * @param maxs             Stored maxima per variable
+ * @param normalizeOutputs Whether to normalize outputs
+ * @param inputSize        Number of input features
+ * @param outputSize       Number of output features
  */
 void TransformMinMaxPerRow(arma::mat& data,
                            const arma::rowvec& mins,
@@ -60,6 +77,10 @@ void TransformMinMaxPerRow(arma::mat& data,
 /* ============================================================
  *                Shape Validation
  * ============================================================ */
+
+/**
+ * @brief Print debug information about dataset and cube dimensions.
+ */
 void ValidateShapes(const arma::mat& dataset,
                     const arma::cube& X,
                     const arma::cube& Y,
@@ -70,6 +91,21 @@ void ValidateShapes(const arma::mat& dataset,
 /* ============================================================
  *                Time-Series Data Builder
  * ============================================================ */
+
+/**
+ * @brief Create LSTM-ready time-series input/output cubes.
+ *
+ * Generates sliding windows of length @p rho for each input feature
+ * and aligns corresponding target output sequences.
+ *
+ * @param dataset Input dataset matrix (features × timesteps)
+ * @param X       Output cube for model inputs
+ * @param Y       Output cube for model targets
+ * @param rho     Sequence length (number of time steps)
+ * @param inputSize Number of input features
+ * @param outputSize Number of output features
+ * @param IO      If true, outputs are part of input block layout
+ */
 void CreateTimeSeriesData(const arma::mat& dataset,
                           arma::cube& X,
                           arma::cube& Y,
@@ -81,12 +117,23 @@ void CreateTimeSeriesData(const arma::mat& dataset,
 /* ============================================================
  *                Result Saving / Post-Processing
  * ============================================================ */
+
 /**
  * @brief Save predictions and input data to CSV, optionally applying
  * inverse per-variable scaling.
  *
  * When `normalizeOutputs = false`, only input rows are inverse-transformed;
  * outputs are assumed to already be in physical units.
+ *
+ * @param filename          Output CSV file path
+ * @param predictions       Predicted outputs (outputSize × nCols × rho)
+ * @param mins              Per-variable minima from normalization
+ * @param maxs              Per-variable maxima from normalization
+ * @param IOData            Input cube (inputSize × nCols × rho)
+ * @param inputSize         Number of input variables
+ * @param outputSize        Number of output variables
+ * @param IO                Whether IO layout is active
+ * @param normalizeOutputs  Whether outputs were normalized
  */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
@@ -99,12 +146,23 @@ void SaveResults(const std::string& filename,
                  const bool normalizeOutputs);
 
 /* ============================================================
- *                Configuration Logging and Validation
+ *                Configuration Logging & Validation
  * ============================================================ */
+
+/**
+ * @brief Convert integer K-Fold mode code to readable string.
+ */
 std::string ModeName(int kfoldMode);
+
+/**
+ * @brief Validate K-Fold and ratio configurations, correcting invalid values.
+ */
 void ValidateConfigOrWarn(int mode, int kfoldMode, int& KFOLDS,
                           double& trainRatio, double& testHoldout);
 
+/**
+ * @brief Print structured summary of all run configuration parameters and file paths.
+ */
 void PrintRunConfig(bool ASM, bool IO, bool bTrain, bool bLoadAndTrain,
                     size_t inputSize, size_t outputSize, int rho,
                     double stepSize, size_t epochs, size_t batchSize,

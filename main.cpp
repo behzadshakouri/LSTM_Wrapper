@@ -100,7 +100,7 @@ int main()
     // ------------------- Execute -------------------
     if (mode == 0)
     {
-        qInfo() << "Running Single-Train/Test Mode...";
+        qInfo().noquote() << "Running Single-Train/Test Mode...";
         TrainSingle(dataFile, modelFile, predFile_Test, predFile_Train,
                     inputSize, outputSize, rho, RATIO_SINGLE,
                     STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
@@ -111,7 +111,7 @@ int main()
     }
     else
     {
-        qInfo() << "Running K-Fold Cross-Validation...";
+        qInfo().noquote() << "Running K-Fold Cross-Validation...";
         TrainKFold_WithMode(dataFile, modelFile, predFile_Test, predFile_Train,
                             inputSize, outputSize, rho, static_cast<size_t>(KFOLDS),
                             STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
@@ -122,6 +122,6 @@ int main()
                             SHUFFLE, NORMALIZE_OUTPUTS);
     }
 
-    qInfo() << "✅ Training process completed successfully.";
+    qInfo().noquote() << "✅ Training process completed successfully.";
     return 0;
 }
