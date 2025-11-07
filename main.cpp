@@ -38,12 +38,13 @@ int main()
     const bool IO   = false;          ///< Enable Input/Output overlap mode
     const bool bTrain = true;         ///< Train a new model
     const bool bLoadAndTrain = false; ///< Continue training existing model
+    const bool NORMALIZE_OUTPUTS = true; ///< Normalize both inputs & outputs (true) or only inputs (false)
 
     // ------------------- Data Configuration -------------------
     const size_t inputSize  = 9;
     const size_t outputSize = 1;
     const int rho           = 1;          ///< Sequence length (lag)
-    const double STEP_SIZE  = 5e-5;    ///< Learning rate
+    const double STEP_SIZE  = 5e-5;       ///< Learning rate
     const size_t EPOCHS     = 1000;       ///< Training epochs
     const size_t BATCH_SIZE = 16;         ///< Mini-batch size
 
@@ -78,7 +79,7 @@ int main()
     static std::string path = "./"; ///< Fallback: current working directory
 #endif
 
-    std::string data_name = "NO"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
+    std::string data_name = "NH"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
     std::string dataFile       = path + "Data/observedoutput_" + data_name + ".txt";
     std::string modelFile      = path + "Results/lstm_multi.bin";
     std::string predFile_Test  = path + "Results/lstm_multi_predictions_test.csv";
@@ -104,7 +105,8 @@ int main()
                     STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
                     bTrain, bLoadAndTrain,
                     H1, H2, H3,
-                    BETA1, BETA2, EPSILON, TOLERANCE, SHUFFLE);
+                    BETA1, BETA2, EPSILON, TOLERANCE,
+                    SHUFFLE, NORMALIZE_OUTPUTS);
     }
     else
     {
@@ -115,7 +117,8 @@ int main()
                             bTrain, bLoadAndTrain,
                             kfoldMode, trainRatio, testHoldout,
                             H1, H2, H3,
-                            BETA1, BETA2, EPSILON, TOLERANCE, SHUFFLE);
+                            BETA1, BETA2, EPSILON, TOLERANCE,
+                            SHUFFLE, NORMALIZE_OUTPUTS);
     }
 
     qInfo() << "✅ Training process completed successfully.";

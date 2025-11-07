@@ -5,8 +5,8 @@
  *
  * Provides interfaces for single-run and cross-validation (K-Fold)
  * training of LSTM-based surrogate models, supporting flexible optimizer
- * settings (Adam hyperparameters) and consistent time-series splitting
- * modes for ASM-type applications.
+ * settings (Adam hyperparameters), optional output normalization, and
+ * consistent time-series splitting modes for ASM-type applications.
  *
  * @see train_modes.cpp
  *
@@ -54,27 +54,28 @@ enum class KFoldMode
  * the provided ratio, trains (or continues training) an LSTM model,
  * and exports predictions for both partitions.
  *
- * @param dataFile        Path to input data file.
- * @param modelFile       Path to save/load serialized model (.bin).
- * @param predFile_Test   CSV file for test predictions.
- * @param predFile_Train  CSV file for training predictions.
- * @param inputSize       Number of input features.
- * @param outputSize      Number of target outputs.
- * @param rho             Sequence length (time window).
- * @param ratio           Train/test ratio (e.g., 0.7 → 70% train, 30% test).
- * @param stepSize        Learning rate for Adam optimizer.
- * @param epochs          Number of training epochs.
- * @param batchSize       Batch size for optimizer.
- * @param IO              Whether to use IO-type (input/output) layout.
- * @param ASM             Reserved for ASM-type model structure (currently unused).
- * @param bTrain          If true, trains model from scratch.
- * @param bLoadAndTrain   If true, loads an existing model and continues training.
- * @param H1,H2,H3        Hidden layer sizes for stacked LSTM layers.
- * @param beta1           Adam β₁ parameter (first moment decay, default 0.9).
- * @param beta2           Adam β₂ parameter (second moment decay, default 0.999).
- * @param epsilon         Adam ε parameter (numerical stability, default 1e-8).
- * @param tolerance       Early stopping tolerance (-1 disables tolerance-based stop).
- * @param shuffle         Whether to shuffle mini-batches each epoch.
+ * @param dataFile          Path to input data file.
+ * @param modelFile         Path to save/load serialized model (.bin).
+ * @param predFile_Test     CSV file for test predictions.
+ * @param predFile_Train    CSV file for training predictions.
+ * @param inputSize         Number of input features.
+ * @param outputSize        Number of target outputs.
+ * @param rho               Sequence length (time window).
+ * @param ratio             Train/test ratio (e.g., 0.7 → 70% train, 30% test).
+ * @param stepSize          Learning rate for Adam optimizer.
+ * @param epochs            Number of training epochs.
+ * @param batchSize         Batch size for optimizer.
+ * @param IO                Whether to use IO-type (input/output) layout.
+ * @param ASM               Reserved for ASM-type model structure (currently unused).
+ * @param bTrain            If true, trains model from scratch.
+ * @param bLoadAndTrain     If true, loads an existing model and continues training.
+ * @param H1,H2,H3          Hidden layer sizes for stacked LSTM layers.
+ * @param beta1             Adam β₁ parameter (first moment decay, default 0.9).
+ * @param beta2             Adam β₂ parameter (second moment decay, default 0.999).
+ * @param epsilon           Adam ε parameter (numerical stability, default 1e-8).
+ * @param tolerance         Early stopping tolerance (-1 disables tolerance-based stop).
+ * @param shuffle           Whether to shuffle mini-batches each epoch.
+ * @param normalizeOutputs  If true, scales both inputs and outputs; if false, scales inputs only.
  */
 void TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,
@@ -87,7 +88,8 @@ void TrainSingle(const std::string& dataFile,
                  bool bTrain, bool bLoadAndTrain,
                  int H1, int H2, int H3,
                  double beta1, double beta2,
-                 double epsilon, double tolerance, bool shuffle);
+                 double epsilon, double tolerance,
+                 bool shuffle, bool normalizeOutputs);
 
 /**
  * @brief Default K-Fold training using forward-chaining (TimeSeries) mode.
@@ -96,27 +98,28 @@ void TrainSingle(const std::string& dataFile,
  * of the data (no shuffling), then retrains the model on the combined
  * dataset and saves final weights and predictions.
  *
- * @param dataFile        Path to dataset file.
- * @param modelFile       Path to save trained model.
- * @param predFile_Test   Output file for test predictions.
- * @param predFile_Train  Output file for training predictions.
- * @param inputSize       Number of input features.
- * @param outputSize      Number of output features.
- * @param rho             Sequence length (time window).
- * @param kfolds          Number of folds (≥ 2).
- * @param stepSize        Learning rate for Adam optimizer.
- * @param epochs          Number of training epochs.
- * @param batchSize       Batch size for optimizer.
- * @param IO              Whether to use IO layout.
- * @param ASM             Reserved for ASM model compatibility.
- * @param bTrain          Whether to train the model.
- * @param bLoadAndTrain   Whether to resume training from saved weights.
- * @param H1,H2,H3        Hidden layer sizes for stacked LSTM layers.
- * @param beta1           Adam β₁ parameter (first moment decay).
- * @param beta2           Adam β₂ parameter (second moment decay).
- * @param epsilon         Adam ε parameter (numerical stability).
- * @param tolerance       Early stopping tolerance (-1 disables).
- * @param shuffle         Whether to shuffle batches each epoch.
+ * @param dataFile          Path to dataset file.
+ * @param modelFile         Path to save trained model.
+ * @param predFile_Test     Output file for test predictions.
+ * @param predFile_Train    Output file for training predictions.
+ * @param inputSize         Number of input features.
+ * @param outputSize        Number of output features.
+ * @param rho               Sequence length (time window).
+ * @param kfolds            Number of folds (≥ 2).
+ * @param stepSize          Learning rate for Adam optimizer.
+ * @param epochs            Number of training epochs.
+ * @param batchSize         Batch size for optimizer.
+ * @param IO                Whether to use IO layout.
+ * @param ASM               Reserved for ASM model compatibility.
+ * @param bTrain            Whether to train the model.
+ * @param bLoadAndTrain     Whether to resume training from saved weights.
+ * @param H1,H2,H3          Hidden layer sizes for stacked LSTM layers.
+ * @param beta1             Adam β₁ parameter (first moment decay).
+ * @param beta2             Adam β₂ parameter (second moment decay).
+ * @param epsilon           Adam ε parameter (numerical stability).
+ * @param tolerance         Early stopping tolerance (-1 disables).
+ * @param shuffle           Whether to shuffle batches each epoch.
+ * @param normalizeOutputs  If true, scales both inputs and outputs; if false, scales inputs only.
  */
 void TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
@@ -129,7 +132,8 @@ void TrainKFold(const std::string& dataFile,
                 bool bTrain, bool bLoadAndTrain,
                 int H1, int H2, int H3,
                 double beta1, double beta2,
-                double epsilon, double tolerance, bool shuffle);
+                double epsilon, double tolerance,
+                bool shuffle, bool normalizeOutputs);
 
 /**
  * @brief Extended K-Fold training interface with selectable mode and ratios.
@@ -137,32 +141,33 @@ void TrainKFold(const std::string& dataFile,
  * Enables explicit selection of cross-validation mode (`Random`,
  * `TimeSeries`, or `FixedRatio`) and flexible control of the train/test
  * ratios, including a separate holdout fraction. Includes parametric
- * Adam optimizer configuration.
+ * Adam optimizer configuration and optional output normalization.
  *
- * @param dataFile        Path to input data file.
- * @param modelFile       Path to save serialized model.
- * @param predFile_Test   CSV file for test predictions.
- * @param predFile_Train  CSV file for training predictions.
- * @param inputSize       Number of input variables.
- * @param outputSize      Number of output variables.
- * @param rho             Sequence length (number of time steps).
- * @param kfolds          Number of K-Fold partitions.
- * @param stepSize        Adam learning rate.
- * @param epochs          Total training epochs.
- * @param batchSize       Mini-batch size.
- * @param IO              Whether to use IO-layout dataset.
- * @param ASM             Reserved for ASM-style configuration.
- * @param bTrain          Whether to train a new model.
- * @param bLoadAndTrain   Whether to continue training existing model.
- * @param modeInt         0 = Random, 1 = TimeSeries, 2 = FixedRatio.
- * @param trainRatio      Training portion (used only for FixedRatio mode).
- * @param testHoldout     Fraction reserved for final holdout test set.
- * @param H1,H2,H3        Hidden layer neuron counts for LSTM stack.
- * @param beta1           Adam β₁ parameter (first moment decay).
- * @param beta2           Adam β₂ parameter (second moment decay).
- * @param epsilon         Adam ε parameter (numerical stability).
- * @param tolerance       Early stopping tolerance (-1 disables).
- * @param shuffle         Whether to shuffle batches each epoch.
+ * @param dataFile          Path to input data file.
+ * @param modelFile         Path to save serialized model.
+ * @param predFile_Test     CSV file for test predictions.
+ * @param predFile_Train    CSV file for training predictions.
+ * @param inputSize         Number of input variables.
+ * @param outputSize        Number of output variables.
+ * @param rho               Sequence length (number of time steps).
+ * @param kfolds            Number of K-Fold partitions.
+ * @param stepSize          Adam learning rate.
+ * @param epochs            Total training epochs.
+ * @param batchSize         Mini-batch size.
+ * @param IO                Whether to use IO-layout dataset.
+ * @param ASM               Reserved for ASM-style configuration.
+ * @param bTrain            Whether to train a new model.
+ * @param bLoadAndTrain     Whether to continue training existing model.
+ * @param modeInt           0 = Random, 1 = TimeSeries, 2 = FixedRatio.
+ * @param trainRatio        Training portion (used only for FixedRatio mode).
+ * @param testHoldout       Fraction reserved for final holdout test set.
+ * @param H1,H2,H3          Hidden layer neuron counts for LSTM stack.
+ * @param beta1             Adam β₁ parameter (first moment decay).
+ * @param beta2             Adam β₂ parameter (second moment decay).
+ * @param epsilon           Adam ε parameter (numerical stability).
+ * @param tolerance         Early stopping tolerance (-1 disables).
+ * @param shuffle           Whether to shuffle batches each epoch.
+ * @param normalizeOutputs  If true, scales both inputs and outputs; if false, scales inputs only.
  */
 void TrainKFold_WithMode(const std::string& dataFile,
                          const std::string& modelFile,
@@ -178,4 +183,5 @@ void TrainKFold_WithMode(const std::string& dataFile,
                          double testHoldout,
                          int H1, int H2, int H3,
                          double beta1, double beta2,
-                         double epsilon, double tolerance, bool shuffle);
+                         double epsilon, double tolerance,
+                         bool shuffle, bool normalizeOutputs);

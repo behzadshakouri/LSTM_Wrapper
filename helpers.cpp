@@ -127,7 +127,7 @@ double ComputeR2(arma::cube& pred, arma::cube& Y)
 }
 
 /* ============================================================
- *                SaveResults (CSV Export + Inverse Scaling)
+ *                SaveResults (CSV Export + Safe Scaling)
  * ============================================================ */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
@@ -135,7 +135,8 @@ void SaveResults(const std::string& filename,
                  const arma::cube& IOData,
                  const int inputSize,
                  const int outputSize,
-                 const bool IO)
+                 const bool IO,
+                 const bool normalizeOutputs)
 {
     cout << "\n========== [SaveResults Debug Info] ==========\n";
 
@@ -159,21 +160,35 @@ void SaveResults(const std::string& filename,
         combined.rows(inputSize - outputSize, inputSize - 1) = yPred;
     }
 
-    cout << "Combined pre-inverse size: " << combined.n_rows << "x" << combined.n_cols << endl;
+    cout << "Combined pre-inverse size: " << combined.n_rows
+         << "x" << combined.n_cols << endl;
 
-    try
+    bool inverseOK = false;
+    if (normalizeOutputs)
     {
-        scale.InverseTransform(combined, combined);
+        try
+        {
+            scale.InverseTransform(combined, combined);
+            inverseOK = true;
+        }
+        catch (const std::exception& e)
+        {
+            cerr << "⚠️  InverseTransform failed (" << e.what()
+                 << "). Saving scaled values instead.\n";
+        }
     }
-    catch (const std::exception& e)
+    else
     {
-        cout << "⚠️  InverseTransform failed (" << e.what() << "). Saving scaled values instead.\n";
+        cout << "[Scaler] Skipped inverse-transform (outputs unnormalized)." << endl;
     }
 
-    if (!mlpack::data::Save(filename, combined))
+    // Always attempt to save the combined matrix
+    if (!combined.save(filename, arma::csv_ascii))
         cerr << "❌ Error: Failed to save results to " << filename << endl;
     else
-        cout << "✅ Saved predictions to: " << filename << endl;
+        cout << (inverseOK ? "✅ Saved predictions (inverse-transformed) → "
+                           : "✅ Saved predictions (scaled/raw) → ")
+             << filename << endl;
 
     cout << "==============================================\n";
 }

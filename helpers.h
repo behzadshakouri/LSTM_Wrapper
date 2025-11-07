@@ -91,18 +91,20 @@ void CreateTimeSeriesData(const arma::mat& dataset,
  *                Result Saving / Post-Processing
  * ============================================================ */
 /**
- * @brief Save predictions and inverse-transformed inputs/outputs to a CSV file.
+ * @brief Save predictions and input features to CSV.
  *
- * The function extracts the final input/output slices, merges them for consistent scaling,
- * applies inverse normalization (if possible), and saves results to CSV.
+ * Robust to whether outputs were normalized or not. When
+ * `normalizeOutputs = false`, the function skips inverse
+ * transformation and directly saves scaled/raw data.
  *
- * @param filename Output CSV file path
- * @param predictions Predicted outputs as an arma::cube
- * @param scale Trained mlpack::data::MinMaxScaler used for normalization
- * @param IOData Input/output cube from which predictions were generated
- * @param inputSize Number of input features
- * @param outputSize Number of output features
- * @param IO Boolean flag indicating input-output layout
+ * @param filename          Output CSV file path
+ * @param predictions       Predicted outputs (outputSize × nCols × rho)
+ * @param scale             Fitted MinMaxScaler (used if normalization was applied)
+ * @param IOData            Input cube (inputSize × nCols × rho)
+ * @param inputSize         Number of input variables
+ * @param outputSize        Number of output variables
+ * @param IO                Whether IO layout is active
+ * @param normalizeOutputs  Whether outputs were normalized with inputs
  */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
@@ -110,7 +112,8 @@ void SaveResults(const std::string& filename,
                  const arma::cube& IOData,
                  const int inputSize,
                  const int outputSize,
-                 const bool IO);
+                 const bool IO,
+                 const bool normalizeOutputs);
 
 /* ============================================================
  *                Configuration Logging and Validation
