@@ -73,45 +73,19 @@ void ValidateShapes(const arma::mat& dataset,
  *
  * @param dataset Input dataset matrix (features × timesteps)
  * @param X Output cube for model input sequences
- * @param y Output cube for model target sequences
+ * @param Y Output cube for model target sequences
  * @param rho Sequence length (number of time steps per window)
  * @param inputSize Number of input features
  * @param outputSize Number of output features
  * @param IO If true, outputs are part of input block layout
  */
-inline void CreateTimeSeriesData(const arma::mat& dataset,
+void CreateTimeSeriesData(const arma::mat& dataset,
                                  arma::cube& X,
-                                 arma::cube& y,
+                                 arma::cube& Y,
                                  const size_t rho,
                                  const int inputSize,
                                  const int outputSize,
-                                 const bool IO)
-{
-    if (!IO)
-    {
-        for (size_t i = 0; i < dataset.n_cols - rho; ++i)
-        {
-            X.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(0, inputSize - 1),
-                               arma::span(i, i + rho - 1));
-            y.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(inputSize, inputSize + outputSize - 1),
-                               arma::span(i + 1, i + rho));
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < dataset.n_cols - rho; ++i)
-        {
-            X.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(0, inputSize - 1),
-                               arma::span(i, i + rho - 1));
-            y.subcube(arma::span(), arma::span(i), arma::span()) =
-                dataset.submat(arma::span(inputSize - outputSize, inputSize - 1),
-                               arma::span(i + 1, i + rho));
-        }
-    }
-}
+                                 const bool IO);
 
 /* ============================================================
  *                Result Saving / Post-Processing

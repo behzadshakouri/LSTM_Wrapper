@@ -43,15 +43,15 @@ int main()
     const size_t inputSize  = 9;
     const size_t outputSize = 1;
     const int rho           = 1;
-    const double STEP_SIZE  = 5e-5;
-    const size_t EPOCHS     = 1000;
+    const double STEP_SIZE  = 5e-5; // 5e-5
+    const size_t EPOCHS     = 1000; // 1000
     const size_t BATCH_SIZE = 16;
 
     // --- LSTM architecture ---
-    const int H1 = 40, H2 = 40, H3 = 40;
+    const int H1 = 10*4, H2 = 8*4, H3 = 7*4;
 
     // --- Mode and ratios ---
-    int mode = 1;        // 0 = single train/test, 1 = KFold cross-validation
+    int mode = 0;        // 0 = single train/test, 1 = KFold cross-validation
     int kfoldMode = 2;   // 0 = Random, 1 = TimeSeries, 2 = FixedRatio
     int KFOLDS = 10;
     const double RATIO_SINGLE = 0.3;

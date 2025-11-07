@@ -38,6 +38,74 @@ void ValidateShapes(const arma::mat& dataset,
     cout << "==============================================\n";
 }
 
+
+/* ============================================================
+ *                Time-Series Data Builder
+ * ============================================================ */
+/**
+ * @brief Create LSTM-ready time-series input/output cubes.
+ *
+ * Generates sliding windows of length @p rho for each input feature
+ * and aligns corresponding target output sequences.
+ *
+ * @param dataset Input dataset matrix (features × timesteps)
+ * @param X Output cube for model input sequences
+ * @param Y Output cube for model target sequences
+ * @param rho Sequence length (number of time steps per window)
+ * @param inputSize Number of input features
+ * @param outputSize Number of output features
+ * @param IO If true, outputs are part of input block layout
+ */
+void CreateTimeSeriesData(const arma::mat& dataset,
+                                 arma::cube& X,
+                                 arma::cube& Y,
+                                 const size_t rho,
+                                 const int inputSize,
+                                 const int outputSize,
+                                 const bool IO)
+{
+    if (dataset.n_rows < (size_t)(inputSize + outputSize))
+        throw std::invalid_argument("[CreateTimeSeriesData] Dataset has fewer rows than input+output size.");
+
+    const size_t nCols = dataset.n_cols;
+    if (nCols <= rho)
+        throw std::invalid_argument("[CreateTimeSeriesData] Dataset too short for given rho.");
+
+    X.set_size(inputSize, nCols - rho, rho);
+    Y.set_size(outputSize, nCols - rho, rho);
+
+    for (size_t i = 0; i < nCols - rho; ++i)
+    {
+        // Input window
+        X.subcube(arma::span(), arma::span(i), arma::span()) =
+            dataset.submat(arma::span(0, inputSize - 1),
+                           arma::span(i, i + rho - 1));
+
+        if (!IO)
+        {
+            // ✅ One-step-ahead target (fix: -1 inside the argument)
+            Y.subcube(arma::span(), arma::span(i), arma::span()) =
+                dataset.submat(arma::span(inputSize, inputSize + outputSize - 1),
+                               arma::span(i + 1, i + rho));
+        }
+        else
+        {
+            Y.subcube(arma::span(), arma::span(i), arma::span()) =
+                dataset.submat(arma::span(inputSize - outputSize, inputSize - 1),
+                               arma::span(i + 1, i + rho));
+        }
+    }
+
+    // Optional alignment check for rho=1
+    if (rho == 1 && nCols > 2)
+    {
+        std::cout << "[CreateTimeSeriesData] Alignment check (first sample): "
+                  << "X(t)=" << dataset(0, 0)
+                  << ", Y(t+1)=" << dataset(inputSize, 1)
+                  << std::endl;
+    }
+}
+
 /* ============================================================
  *                Metric Computation
  * ============================================================ */
