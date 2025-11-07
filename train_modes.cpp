@@ -24,7 +24,6 @@ using namespace std;
 using namespace arma;
 using namespace mlpack;
 using namespace mlpack::ann;
-using namespace mlpack::data;
 using namespace ens;
 
 /* ============================================================
@@ -123,28 +122,10 @@ static void TrainCore(arma::mat& trainData,
                       bool shuffle, bool normalizeOutputs)
 {
     // ------------------- Normalization -------------------
-    MinMaxScaler scale;
-
-    if (normalizeOutputs)
-    {
-        scale.Fit(trainData);
-        scale.Transform(trainData, trainData);
-        scale.Transform(testData, testData);
-        cout << "[Scaler] Normalized inputs + outputs." << endl;
-    }
-    else
-    {
-        arma::mat inputTrain = trainData.rows(0, inputSize - 1);
-        arma::mat inputTest  = testData.rows(0, inputSize - 1);
-
-        scale.Fit(inputTrain);
-        scale.Transform(inputTrain, inputTrain);
-        scale.Transform(inputTest, inputTest);
-
-        trainData.rows(0, inputSize - 1) = inputTrain;
-        testData.rows(0, inputSize - 1)  = inputTest;
-        cout << "[Scaler] Normalized inputs only (outputs unchanged)." << endl;
-    }
+    arma::rowvec mins, maxs;
+    FitMinMaxPerRow(trainData, mins, maxs, normalizeOutputs, inputSize, outputSize);
+    TransformMinMaxPerRow(trainData, mins, maxs, normalizeOutputs, inputSize, outputSize);
+    TransformMinMaxPerRow(testData , mins, maxs, normalizeOutputs, inputSize, outputSize);
 
     // ------------------- Time-Series Cube Preparation -------------------
     arma::cube trainX(inputSize, trainData.n_cols - rho, rho);
@@ -211,8 +192,8 @@ static void TrainCore(arma::mat& trainData,
     cout << "Train MSE = " << mseTrain << ", R² = " << r2Train << endl;
 
     // ------------------- Save Results -------------------
-    SaveResults(predFile_Test , predTest , scale, testX , (int)inputSize, (int)outputSize, IO, normalizeOutputs);
-    SaveResults(predFile_Train, predTrain, scale, trainX, (int)inputSize, (int)outputSize, IO, normalizeOutputs);
+    SaveResults(predFile_Test , predTest , mins, maxs, testX , (int)inputSize, (int)outputSize, IO, normalizeOutputs);
+    SaveResults(predFile_Train, predTrain, mins, maxs, trainX, (int)inputSize, (int)outputSize, IO, normalizeOutputs);
 }
 
 /* ============================================================
@@ -276,8 +257,6 @@ static void TrainKFold_Impl(const std::string& dataFile,
     arma::mat trainValData, testData;
     data::Split(dataset, trainValData, testData, holdoutRatioForTest, false);
     cout << "TrainVal: " << trainValData.n_cols << ", Test: " << testData.n_cols << endl;
-
-    vector<double> mseValList, r2ValList;
 
     for (int fold = 0; fold < kfolds; ++fold)
     {

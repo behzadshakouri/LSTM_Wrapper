@@ -127,11 +127,58 @@ double ComputeR2(arma::cube& pred, arma::cube& Y)
 }
 
 /* ============================================================
+ *                Normalizer
+ * ============================================================ */
+void NormalizePerColumn(arma::mat& data,
+                        arma::rowvec& mins,
+                        arma::rowvec& maxs,
+                        bool normalizeOutputs,
+                        size_t inputSize,
+                        size_t outputSize)
+{
+    const size_t nRows = data.n_rows;
+    mins.set_size(nRows);
+    maxs.set_size(nRows);
+
+    for (size_t r = 0; r < nRows; ++r)
+    {
+        // Skip output rows if normalization disabled
+        if (!normalizeOutputs && r >= inputSize)
+            continue;
+
+        double minVal = data.row(r).min();
+        double maxVal = data.row(r).max();
+
+        // Handle constant features safely
+        if (std::fabs(maxVal - minVal) < 1e-12)
+            maxVal = minVal + 1e-12;
+
+        mins[r] = minVal;
+        maxs[r] = maxVal;
+
+        data.row(r) = (data.row(r) - minVal) / (maxVal - minVal);
+    }
+}
+
+/**
+ * @brief Inverse-transform column-wise normalized data using stored min/max.
+ */
+void InversePerColumn(arma::mat& data,
+                      const arma::rowvec& mins,
+                      const arma::rowvec& maxs)
+{
+    const size_t nRows = data.n_rows;
+    for (size_t r = 0; r < nRows; ++r)
+        data.row(r) = data.row(r) * (maxs[r] - mins[r]) + mins[r];
+}
+
+/* ============================================================
  *                SaveResults (CSV Export + Safe Scaling)
  * ============================================================ */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
-                 mlpack::data::MinMaxScaler& scale,
+                 const arma::rowvec& mins,
+                 const arma::rowvec& maxs,
                  const arma::cube& IOData,
                  const int inputSize,
                  const int outputSize,
@@ -168,7 +215,7 @@ void SaveResults(const std::string& filename,
     {
         try
         {
-            scale.InverseTransform(combined, combined);
+            InversePerColumn(combined, mins, maxs);
             inverseOK = true;
         }
         catch (const std::exception& e)

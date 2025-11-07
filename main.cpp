@@ -12,6 +12,7 @@
  */
 
 #include <QDebug>
+#include <armadillo>
 #include <pch.h>
 #include <ensmallen.hpp>
 #include <string>
@@ -34,37 +35,37 @@ using namespace ens;
 int main()
 {
     // ------------------- Core Configuration -------------------
-    const bool ASM  = true;           ///< Enable ASM dataset format
-    const bool IO   = false;          ///< Enable Input/Output overlap mode
-    const bool bTrain = true;         ///< Train a new model
-    const bool bLoadAndTrain = false; ///< Continue training existing model
+    const bool ASM  = true;              ///< Enable ASM dataset format
+    const bool IO   = false;             ///< Enable Input/Output overlap mode
+    const bool bTrain = true;            ///< Train a new model
+    const bool bLoadAndTrain = false;    ///< Continue training existing model
     const bool NORMALIZE_OUTPUTS = true; ///< Normalize both inputs & outputs (true) or only inputs (false)
 
     // ------------------- Data Configuration -------------------
-    const size_t inputSize  = 9;
-    const size_t outputSize = 1;
-    const int rho           = 1;          ///< Sequence length (lag)
-    const double STEP_SIZE  = 5e-5;       ///< Learning rate
-    const size_t EPOCHS     = 1000;       ///< Training epochs
-    const size_t BATCH_SIZE = 16;         ///< Mini-batch size
+    const size_t inputSize  = 9;         ///< Number of input features
+    const size_t outputSize = 1;         ///< Number of output variables
+    const int rho           = 1;         ///< Sequence length (lag)
+    const double STEP_SIZE  = 5e-5;      ///< Learning rate
+    const size_t EPOCHS     = 1000;      ///< Training epochs
+    const size_t BATCH_SIZE = 16;        ///< Mini-batch size
 
-    // ------------------- LSTM Architecture (Neurons) -------------------
+    // ------------------- LSTM Architecture -------------------
     const int H1 = 10 * 4;
-    const int H2 = 8  * 4;
-    const int H3 = 7  * 4;
+    const int H2 = 10 * 4;
+    const int H3 = 10 * 4;
 
     // ------------------- Adam Optimizer Parameters -------------------
-    const double BETA1      = 0.9;     ///< Momentum for first moment
-    const double BETA2      = 0.999;   ///< Momentum for second moment
-    const double EPSILON    = 1e-8;    ///< Numerical stability constant
+    const double BETA1      = 0.9;     ///< First moment decay rate
+    const double BETA2      = 0.999;   ///< Second moment decay rate
+    const double EPSILON    = 1e-8;    ///< Numerical stability term
     const double TOLERANCE  = 1e-7;    ///< Early-stop / convergence tolerance
-    const bool   SHUFFLE    = false;   ///< Keep order for time-series
+    const bool   SHUFFLE    = false;   ///< Keep order for time-series data
 
     // ------------------- Mode and Ratios -------------------
     int mode = 0;          ///< 0 = single train/test, 1 = KFold cross-validation
     int kfoldMode = 2;     ///< 0 = Random, 1 = TimeSeries, 2 = FixedRatio
     int KFOLDS = 10;
-    const double RATIO_SINGLE = 0.3;   ///< 70% train / 30% test split for single mode
+    const double RATIO_SINGLE = 0.3;   ///< 70% train / 30% test split
     double trainRatio  = static_cast<double>(KFOLDS - 1) / KFOLDS;
     double testHoldout = 0.3;
 
@@ -79,7 +80,7 @@ int main()
     static std::string path = "./"; ///< Fallback: current working directory
 #endif
 
-    std::string data_name = "NH"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
+    std::string data_name = "NO"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
     std::string dataFile       = path + "Data/observedoutput_" + data_name + ".txt";
     std::string modelFile      = path + "Results/lstm_multi.bin";
     std::string predFile_Test  = path + "Results/lstm_multi_predictions_test.csv";
