@@ -58,8 +58,8 @@ int main()
     const double BETA1      = 0.9;     ///< First moment decay rate
     const double BETA2      = 0.999;   ///< Second moment decay rate
     const double EPSILON    = 1e-8;    ///< Numerical stability term
-    const double TOLERANCE  = 1e-7;    ///< Early-stop / convergence tolerance
-    const bool   SHUFFLE    = false;   ///< Keep order for time-series data
+    const double TOLERANCE  = 1e-8;    ///< Early-stop / convergence tolerance
+    const bool   SHUFFLE    = true;   ///< Keep order for time-series data
 
     // ------------------- Mode and Ratios -------------------
     int mode = 0;          ///< 0 = single train/test, 1 = KFold cross-validation
