@@ -76,6 +76,8 @@ enum class KFoldMode
  * @param tolerance         Early stopping tolerance (-1 disables tolerance-based stop).
  * @param shuffle           Whether to shuffle mini-batches each epoch.
  * @param normalizeOutputs  If true, scales both inputs and outputs; if false, scales inputs only.
+ * @param normType          Normalization method:
+ *                          0 = PerVariable, 1 = MLpackMinMax, 2 = ZScore, 3 = None.
  */
 void TrainSingle(const std::string& dataFile,
                  const std::string& modelFile,
@@ -89,7 +91,8 @@ void TrainSingle(const std::string& dataFile,
                  int H1, int H2, int H3,
                  double beta1, double beta2,
                  double epsilon, double tolerance,
-                 bool shuffle, bool normalizeOutputs);
+                 bool shuffle, bool normalizeOutputs,
+                 NormalizationType normType = NormalizationType::PerVariable);
 
 /**
  * @brief Default K-Fold training using forward-chaining (TimeSeries) mode.
@@ -120,6 +123,8 @@ void TrainSingle(const std::string& dataFile,
  * @param tolerance         Early stopping tolerance (-1 disables).
  * @param shuffle           Whether to shuffle batches each epoch.
  * @param normalizeOutputs  If true, scales both inputs and outputs; if false, scales inputs only.
+ * @param normType          Normalization method:
+ *                          0 = PerVariable, 1 = MLpackMinMax, 2 = ZScore, 3 = None.
  */
 void TrainKFold(const std::string& dataFile,
                 const std::string& modelFile,
@@ -133,7 +138,8 @@ void TrainKFold(const std::string& dataFile,
                 int H1, int H2, int H3,
                 double beta1, double beta2,
                 double epsilon, double tolerance,
-                bool shuffle, bool normalizeOutputs);
+                bool shuffle, bool normalizeOutputs,
+                NormalizationType normType = NormalizationType::PerVariable);
 
 /**
  * @brief Extended K-Fold training interface with selectable mode and ratios.
@@ -168,6 +174,8 @@ void TrainKFold(const std::string& dataFile,
  * @param tolerance         Early stopping tolerance (-1 disables).
  * @param shuffle           Whether to shuffle batches each epoch.
  * @param normalizeOutputs  If true, scales both inputs and outputs; if false, scales inputs only.
+ * @param normType          Normalization method:
+ *                          0 = PerVariable, 1 = MLpackMinMax, 2 = ZScore, 3 = None.
  */
 void TrainKFold_WithMode(const std::string& dataFile,
                          const std::string& modelFile,
@@ -184,4 +192,5 @@ void TrainKFold_WithMode(const std::string& dataFile,
                          int H1, int H2, int H3,
                          double beta1, double beta2,
                          double epsilon, double tolerance,
-                         bool shuffle, bool normalizeOutputs);
+                         bool shuffle, bool normalizeOutputs,
+                         NormalizationType normType = NormalizationType::PerVariable);

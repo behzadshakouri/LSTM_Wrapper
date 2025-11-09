@@ -19,6 +19,28 @@
 #include <pch.h>  // must come first for mlpack linkage
 
 /* ============================================================
+ *                Normalization Type Selector
+ * ============================================================ */
+/**
+ * @enum NormalizationType
+ * @brief Enumeration of supported normalization/scaling modes.
+ *
+ * Defines which scaling strategy is applied to input/output data.
+ *
+ * - **PerVariable** : Custom per-variable min–max (manual)
+ * - **MLpackMinMax**: MLpack’s built-in MinMaxScaler (0–1 range)
+ * - **ZScore**      : Standardization using mean and standard deviation
+ * - **None**        : No normalization applied
+ */
+enum class NormalizationType
+{
+    PerVariable = 0,   ///< Row-wise min–max scaling (default)
+    MLpackMinMax = 1,  ///< MLpack MinMaxScaler (0–1)
+    ZScore = 2,        ///< Standardization (mean/std)
+    None = 3           ///< No normalization
+};
+
+/* ============================================================
  *                Metric Evaluation
  * ============================================================ */
 
@@ -73,6 +95,28 @@ void TransformMinMaxPerRow(arma::mat& data,
                            bool normalizeOutputs,
                            size_t inputSize,
                            size_t outputSize);
+
+/**
+ * @brief Apply selected normalization strategy to training and testing datasets.
+ *
+ * Supports multiple normalization types: PerVariable (custom row-wise scaling),
+ * MLpackMinMax (built-in 0–1 scaling), ZScore (mean/std standardization), and None.
+ *
+ * @param mode              Normalization type (enum)
+ * @param train             Training dataset (modified in-place)
+ * @param test              Testing dataset (modified in-place)
+ * @param mins              Output: minima or means (for inverse transformation)
+ * @param maxs              Output: maxima or std deviations (for inverse transformation)
+ * @param normalizeOutputs  Whether to normalize outputs
+ * @param inputSize         Number of input variables
+ */
+void ApplyNormalization(NormalizationType mode,
+                        arma::mat& train,
+                        arma::mat& test,
+                        arma::rowvec& mins,
+                        arma::rowvec& maxs,
+                        bool normalizeOutputs,
+                        size_t inputSize);
 
 /* ============================================================
  *                Shape Validation
