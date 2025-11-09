@@ -107,7 +107,7 @@ static auto KFoldSplit_FixedRatio(const arma::mat& data,
  *                  Core Training Function (Extended)
  * ============================================================ */
 
-static void TrainCore(arma::mat& trainData,
+void TrainCore(arma::mat& trainData,
                       arma::mat& testData,
                       const std::string& modelFile,
                       const std::string& predFile_Test,
