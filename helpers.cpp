@@ -111,16 +111,6 @@ void ApplyNormalization(NormalizationType mode,
 /* ============================================================
  *                Validation & Logging Stubs
  * ============================================================ */
-void ValidateShapes(const arma::mat& data, const arma::cube& X,
-                    const arma::cube& Y, size_t inputSize,
-                    size_t outputSize, int rho)
-{
-    if (data.n_rows < inputSize + outputSize)
-        qWarning() << "Data has fewer rows than expected!";
-    if (X.n_slices != (size_t)rho)
-        qWarning() << "Unexpected number of time slices in X";
-}
-
 void CreateTimeSeriesData(const arma::mat& dataset,
                           arma::cube& X,
                           arma::cube& Y,
@@ -129,17 +119,71 @@ void CreateTimeSeriesData(const arma::mat& dataset,
                           int outputSize,
                           bool IO)
 {
-    for (size_t i = 0; i < dataset.n_cols - rho; ++i)
+    const size_t nSamples = dataset.n_cols - rho;
+    X.set_size(inputSize, rho, nSamples);
+    Y.set_size(outputSize, rho, nSamples);
+
+    for (size_t i = 0; i < nSamples; ++i)
     {
-        X.slice(i) = dataset.submat(0, i, inputSize - 1, i + rho - 1);
+        // Fill each sample (slice) with a window of length ρ
+        X.slice(i) = dataset.submat(0, i,
+                                    inputSize - 1,
+                                    i + rho - 1);
+
         if (!IO)
-            Y.slice(i) = dataset.submat(inputSize, i + 1,
-                                        inputSize + outputSize - 1, i + rho);
+        {
+            // Targets start one step ahead of inputs
+            Y.slice(i) = dataset.submat(inputSize,
+                                        i + 1,
+                                        inputSize + outputSize - 1,
+                                        i + rho);
+        }
         else
-            Y.slice(i) = dataset.submat(inputSize - outputSize, i + 1,
-                                        inputSize - 1, i + rho);
+        {
+            // IO-type datasets use last output(s) as inputs
+            Y.slice(i) = dataset.submat(inputSize - outputSize,
+                                        i + 1,
+                                        inputSize - 1,
+                                        i + rho);
+        }
     }
 }
+
+
+void ValidateShapes(const arma::mat& data,
+                    const arma::cube& X,
+                    const arma::cube& Y,
+                    size_t inputSize,
+                    size_t outputSize,
+                    int rho)
+{
+    bool ok = true;
+
+    if (X.n_rows != inputSize)
+    {
+        qWarning() << "X.n_rows (" << X.n_rows
+                   << ") != inputSize (" << inputSize << ")";
+        ok = false;
+    }
+    if (Y.n_rows != outputSize)
+    {
+        qWarning() << "Y.n_rows (" << Y.n_rows
+                   << ") != outputSize (" << outputSize << ")";
+        ok = false;
+    }
+    if (X.n_cols != (size_t)rho || Y.n_cols != (size_t)rho)
+    {
+        qWarning() << "rho mismatch → expected" << rho
+                   << "got X.n_cols=" << X.n_cols
+                   << ", Y.n_cols=" << Y.n_cols;
+        ok = false;
+    }
+    if (ok)
+        qInfo().noquote() << "✅ Shape check passed:"
+                          << "X" << X.n_rows << "×" << X.n_cols << "×" << X.n_slices
+                          << ", Y" << Y.n_rows << "×" << Y.n_cols << "×" << Y.n_slices;
+}
+
 
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,

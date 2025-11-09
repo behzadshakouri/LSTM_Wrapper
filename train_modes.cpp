@@ -167,6 +167,7 @@ void TrainCore(arma::mat& trainData,
 
         Adam optimizer(stepSize, batchSize, beta1, beta2, epsilon,
                        trainData.n_cols * epochs, tolerance, shuffle);
+
         optimizer.Tolerance() = -1; // rely on callbacks / max iters
 
         cout << "Training ..." << endl;
