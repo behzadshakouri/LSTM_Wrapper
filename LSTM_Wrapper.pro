@@ -1,100 +1,83 @@
-###############################################################
-#  LSTM_Wrapper.pro
-#  Qt / qmake build configuration for LSTM-based ASM emulator
-#  Authors: Behzad Shakouri & Arash Massoudieh
-###############################################################
+# ============================================================
+#  Project: LSTM_Wrapper
+#  Description: LSTM surrogate model training (mlpack + Armadillo + Qt)
+# ============================================================
 
 TEMPLATE = app
 CONFIG += console c++17
 CONFIG -= app_bundle
 CONFIG += core
 
-# ------------------------------------------------------------
-# Precompiled Header
-# ------------------------------------------------------------
+# ------------------------
+# Precompiled header
+# ------------------------
 CONFIG += precompile_header
 PRECOMPILED_HEADER = pch.h
-precompile_header:!isEmpty(PRECOMPILED_HEADER) {
-    DEFINES += USING_PCH
-}
 
-# ------------------------------------------------------------
-# Build Environment
-# ------------------------------------------------------------
-# Uncomment your environment
+DEFINES += USING_PCH
+
+# ------------------------
+# Build configurations
+# ------------------------
 CONFIG += PowerEdge
 DEFINES += PowerEdge
 
+# Uncomment as needed for other systems
 # CONFIG += Behzad
 # DEFINES += Behzad
-
 # CONFIG += Arash
 # DEFINES += Arash
 
-# ------------------------------------------------------------
-# Compiler / Linker Flags
-# ------------------------------------------------------------
-QMAKE_CXXFLAGS *= "-fopenmp"
-QMAKE_LFLAGS  += -fopenmp
+# ------------------------
+# Compiler / Linker flags
+# ------------------------
+QMAKE_CXXFLAGS += -O2 -fopenmp
+QMAKE_LFLAGS   += -fopenmp
 
-DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS _ARMA
-DEFINES += ARMA_USE_SUPERLU GSL
+DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS ARMA_USE_SUPERLU _ARMA
+DEFINES += GSL
 CONFIG  += use_VTK
 
-# ------------------------------------------------------------
-# Include Directories
-# ------------------------------------------------------------
-INCLUDEPATH += $$OHQPATH
+# ------------------------
+# Include paths
+# ------------------------
+INCLUDEPATH += /usr/include \
+                /usr/local/include \
+                $$HOME/Libraries/ensmallen/include
 
-# System include directories
-INCLUDEPATH += /usr/include
-INCLUDEPATH += /usr/local/include
-INCLUDEPATH += /usr/include/mlpack
-INCLUDEPATH += /usr/include/armadillo
-INCLUDEPATH += /usr/include/ensmallen
-INCLUDEPATH += /usr/include/boost
+# ------------------------
+# Library paths and link order
+# ------------------------
+LIBS += -L/lib/x86_64-linux-gnu \
+        -lmlpack \
+        -larmadillo \
+        -lboost_system \
+        -lboost_filesystem \
+        -lboost_serialization \
+        -lboost_program_options \
+        -lblas -llapack \
+        -lgsl -lgslcblas \
+        -lgomp -lpthread
 
-# (Optional) Local library paths, if you built mlpack manually
-# INCLUDEPATH += $$HOME/Libraries/mlpack/include
-# INCLUDEPATH += $$HOME/Libraries/ensmallen/include
-
-# ------------------------------------------------------------
-# Source Files
-# ------------------------------------------------------------
+# ------------------------
+# Source files
+# ------------------------
 SOURCES += \
     helpers.cpp \
     lstmtimeseriesset.cpp \
-    main.cpp \
-    train_modes.cpp
+    train_modes.cpp \
+    main.cpp
 
-# ------------------------------------------------------------
-# Header Files
-# ------------------------------------------------------------
+# ------------------------
+# Header files
+# ------------------------
 HEADERS += \
     helpers.h \
     lstmtimeseriesset.h \
     pch.h \
     train_modes.h
 
-# ------------------------------------------------------------
-# Libraries (system-installed)
-# ------------------------------------------------------------
-LIBS += -L/usr/lib/x86_64-linux-gnu \
-        -L/usr/local/lib \
-        -lmlpack \
-        -larmadillo \
-        -lboost_serialization \
-        -lboost_program_options \
-        -lboost_system \
-        -lboost_filesystem \
-        -lboost_iostreams \
-        -llapack -lblas -lgsl \
-        -lgomp -lpthread
-
-# ------------------------------------------------------------
-# Notes:
-#  - Ensure you have installed these packages:
-#      sudo apt install libmlpack-dev libarmadillo-dev \
-#           libensmallen-dev libboost-all-dev libgsl-dev
-#  - No mlpack source files are compiled each time — only linked.
-# ------------------------------------------------------------
+# ------------------------
+# Additional build info
+# ------------------------
+QMAKE_POST_LINK += echo "✅ Build completed successfully."

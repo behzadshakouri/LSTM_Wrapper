@@ -2,9 +2,8 @@
  * @file main.cpp
  * @brief Entry point for the LSTM Wrapper with single or K-Fold training modes.
  *
- * This program orchestrates LSTM-based time-series training and evaluation for
- * ASM-type environmental modeling. The configuration is logged clearly and
- * supports three K-Fold strategies: Random, TimeSeries, and FixedRatio.
+ * Supports single train/test or cross-validation (Random, TimeSeries, FixedRatio)
+ * training for LSTM-based surrogate models of ASM-type environmental systems.
  *
  * Authors:
  *   Behzad Shakouri
@@ -23,59 +22,62 @@ using namespace std;
 using namespace mlpack;
 using namespace ens;
 
-/**
- * @brief Main entry point of the LSTM Wrapper program.
- *
- * Defines network architecture, optimizer, and dataset configuration,
- * then calls either `TrainSingle()` or `TrainKFold_WithMode()` depending on
- * the selected mode.
- *
- * @return 0 on successful execution.
- */
 int main()
 {
-    // ------------------- Core Configuration -------------------
+    // ============================================================
+    // Core Configuration
+    // ============================================================
     const bool ASM  = true;              ///< Enable ASM dataset format
     const bool IO   = false;             ///< Enable Input/Output overlap mode
     const bool bTrain = true;            ///< Train a new model
     const bool bLoadAndTrain = false;    ///< Continue training existing model
-    const bool NORMALIZE_OUTPUTS = true; ///< Normalize both inputs & outputs (true) or only inputs (false)
+    const bool NORMALIZE_OUTPUTS = true; ///< Normalize both inputs and outputs
 
     std::string data_name = "NO"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
 
-    // ------------------- Normalization Configuration -------------------
+    // ============================================================
+    // Normalization Configuration
+    // ============================================================
     int normTypeInt = 0;  // 0=PerVariable, 1=MLpackMinMax, 2=ZScore, 3=None
     NormalizationType normType = static_cast<NormalizationType>(normTypeInt);
 
-    // ------------------- Data Configuration -------------------
-    const size_t inputSize  = 9;         ///< Number of input features
-    const size_t outputSize = 1;         ///< Number of output variables
-    const int rho           = 1;         ///< Sequence length (lag)
-    const double STEP_SIZE  = 5e-5;      ///< Learning rate
-    const size_t EPOCHS     = 1000;      ///< Training epochs
-    const size_t BATCH_SIZE = 16;        ///< Mini-batch size
+    // ============================================================
+    // Data & Model Configuration
+    // ============================================================
+    const size_t inputSize  = 9;    ///< Number of input features
+    const size_t outputSize = 1;    ///< Number of output variables
+    const int rho           = 1;    ///< Sequence length (lag)
+    const double STEP_SIZE  = 5e-5; ///< Adam learning rate
+    const size_t EPOCHS     = 1000; ///< Number of training epochs
+    const size_t BATCH_SIZE = 16;   ///< Mini-batch size
 
-    // ------------------- LSTM Architecture -------------------
-    const int H1 = 40;
-    const int H2 = 40;
-    const int H3 = 40;
+    // ============================================================
+    // LSTM Architecture
+    // ============================================================
+    const int H1 = 40, H2 = 40, H3 = 40;
 
-    // ------------------- Adam Optimizer Parameters -------------------
-    const double BETA1      = 0.9;     ///< First moment decay rate
-    const double BETA2      = 0.999;   ///< Second moment decay rate
-    const double EPSILON    = 1e-8;    ///< Numerical stability term
-    const double TOLERANCE  = 1e-8;    ///< Early-stop / convergence tolerance
-    const bool   SHUFFLE    = true;    ///< Shuffle mini-batches each epoch (false for strict time-series)
+    // ============================================================
+    // Adam Optimizer Parameters
+    // ============================================================
+    const double BETA1      = 0.9;
+    const double BETA2      = 0.999;
+    const double EPSILON    = 1e-8;
+    const double TOLERANCE  = 1e-8;
+    const bool   SHUFFLE    = true; ///< false for strict time-series order
 
-    // ------------------- Mode and Ratios -------------------
-    int mode = 0;          ///< 0 = single train/test, 1 = KFold cross-validation
+    // ============================================================
+    // Training Mode Configuration
+    // ============================================================
+    int mode = 0;          ///< 0 = single train/test, 1 = KFold CV
     int kfoldMode = 2;     ///< 0 = Random, 1 = TimeSeries, 2 = FixedRatio
     int KFOLDS = 10;
-    const double RATIO_SINGLE = 0.3;   ///< 70% train / 30% test split
+    const double RATIO_SINGLE = 0.3; ///< Train/test split (70/30)
     double trainRatio  = static_cast<double>(KFOLDS - 1) / KFOLDS;
     double testHoldout = 0.3;
 
-    // ------------------- File Paths -------------------
+    // ============================================================
+    // File Paths
+    // ============================================================
 #ifdef PowerEdge
     static std::string path = "/mnt/3rd900/Projects/LSTM_Wrapper/";
 #elif defined(Behzad)
@@ -91,7 +93,9 @@ int main()
     std::string predFile_Test  = path + "Results/lstm_multi_predictions_test.csv";
     std::string predFile_Train = path + "Results/lstm_multi_predictions_train.csv";
 
-    // ------------------- Logging and Validation -------------------
+    // ============================================================
+    // Log Configuration
+    // ============================================================
     PrintRunConfig(ASM, IO, bTrain, bLoadAndTrain,
                    inputSize, outputSize, rho,
                    STEP_SIZE, EPOCHS, BATCH_SIZE,
@@ -102,10 +106,12 @@ int main()
 
     ValidateConfigOrWarn(mode, kfoldMode, KFOLDS, trainRatio, testHoldout);
 
-    // ------------------- Execute -------------------
+    // ============================================================
+    // Execute
+    // ============================================================
     if (mode == 0)
     {
-        qInfo().noquote() << "Running Single-Train/Test Mode...";
+        qInfo().noquote() << "Running Single Train/Test Mode...";
         TrainSingle(dataFile, modelFile, predFile_Test, predFile_Train,
                     inputSize, outputSize, rho, RATIO_SINGLE,
                     STEP_SIZE, EPOCHS, BATCH_SIZE, IO, ASM,
@@ -130,6 +136,7 @@ int main()
     qInfo().noquote() << "✅ Training process completed successfully.";
     return 0;
 }
+
 
 
 //--------------------------------------------------------------------------------------------------

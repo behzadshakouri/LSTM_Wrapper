@@ -15,7 +15,6 @@
 #include <sstream>
 #include <QDebug>
 #include <mlpack/core/data/scaler_methods/min_max_scaler.hpp>
-#include "train_modes.h"   // for NormalizationType enum
 
 using namespace std;
 using namespace arma;
@@ -98,29 +97,9 @@ void TransformMinMaxPerRow(arma::mat& data,
     }
 }
 
-static void InverseMinMaxPerRow(arma::mat& data,
-                                const arma::rowvec& mins,
-                                const arma::rowvec& maxs)
-{
-    const size_t nRows = data.n_rows;
-    for (size_t r = 0; r < nRows; ++r)
-        data.row(r) = data.row(r) * (maxs[r] - mins[r]) + mins[r];
-}
-
 /* ============================================================
  *                Extended Normalization Interface
  * ============================================================ */
-/**
- * @brief General normalization dispatcher supporting multiple modes.
- *
- * @param mode     NormalizationType enum (PerVariable, MLpackMinMax, ZScore, None)
- * @param train    Training data matrix (modified in-place)
- * @param test     Test data matrix (modified in-place)
- * @param mins     Output vector for min values (for inverse scaling)
- * @param maxs     Output vector for max/scale values (for inverse scaling)
- * @param normalizeOutputs Whether to normalize outputs
- * @param inputSize Number of input features
- */
 void ApplyNormalization(NormalizationType mode,
                         arma::mat& train,
                         arma::mat& test,
@@ -149,7 +128,7 @@ void ApplyNormalization(NormalizationType mode,
             scaler.Transform(train, train);
             scaler.Transform(test, test);
 
-            // Store synthetic min/max placeholders for consistency
+            // Store dummy min/max placeholders for compatibility
             mins.set_size(train.n_rows);
             maxs.set_size(train.n_rows);
             mins.fill(0.0);
@@ -164,7 +143,6 @@ void ApplyNormalization(NormalizationType mode,
             mins.set_size(nRows);
             maxs.set_size(nRows);
 
-            // Compute per-variable mean and std from training set only
             for (size_t r = 0; r < nRows; ++r)
             {
                 if (!normalizeOutputs && r >= inputSize)
@@ -176,12 +154,10 @@ void ApplyNormalization(NormalizationType mode,
 
                 double meanVal = arma::mean(train.row(r));
                 double stdVal  = arma::stddev(train.row(r));
+                if (stdVal < 1e-12) stdVal = 1.0;
 
-                if (stdVal < 1e-12)
-                    stdVal = 1.0;
-
-                mins[r] = meanVal;  // store mean
-                maxs[r] = stdVal;   // store std
+                mins[r] = meanVal;
+                maxs[r] = stdVal;
 
                 train.row(r) = (train.row(r) - meanVal) / stdVal;
                 test.row(r)  = (test.row(r)  - meanVal) / stdVal;
