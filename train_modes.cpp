@@ -200,8 +200,11 @@ void TrainCore(arma::mat& trainData,
     cout << "Train MSE = " << mseTrain << ", R² = " << r2Train << endl;
 
     /* ------------------- Save Results ------------------- */
-    SaveResults(predFile_Test , predTest , mins, maxs, testX , (int)inputSize, (int)outputSize, IO, normalizeOutputs);
-    SaveResults(predFile_Train, predTrain, mins, maxs, trainX, (int)inputSize, (int)outputSize, IO, normalizeOutputs);
+    SaveResults(predFile_Test , predTest , mins, maxs, testX ,
+                (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
+    SaveResults(predFile_Train, predTrain, mins, maxs, trainX,
+                (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
+
 }
 
 /* ============================================================

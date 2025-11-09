@@ -63,6 +63,16 @@ void ValidateShapes(const arma::mat& data,
 /* ============================================================
  *                Output Handling
  * ============================================================ */
+/**
+ * SaveResults (unified version)
+ * -----------------------------
+ * Recreates the behavior of SaveResults_old(), but supports all normalization
+ * types (PerVariable, MLpackMinMax, ZScore) and both ASM (IO=false) and IO=true datasets.
+ *
+ * Saves unscaled input data (last slice) and corresponding predicted outputs
+ * in original physical units. The last columns are predictions; preceding
+ * columns are the data used to generate those predictions.
+ */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
                  const arma::rowvec& mins,
@@ -71,7 +81,8 @@ void SaveResults(const std::string& filename,
                  int inputSize,
                  int outputSize,
                  bool IO,
-                 bool normalizeOutputs);
+                 bool normalizeOutputs,
+                 NormalizationType normType = NormalizationType::PerVariable);
 
 /* ============================================================
  *                Run Configuration Logging

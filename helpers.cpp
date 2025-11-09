@@ -6,6 +6,7 @@
 #include "pch.h"
 #include "helpers.h"
 #include <mlpack/core/data/scaler_methods/min_max_scaler.hpp>
+#include <mlpack/core/data/scaler_methods/standard_scaler.hpp>
 
 using namespace std;
 using namespace arma;
@@ -46,7 +47,7 @@ void ApplyNormalization(NormalizationType mode,
     {
         case NormalizationType::PerVariable:
         {
-            cout << "[Normalization] Per-variable min–max scaling\n";
+            std::cout << "[Normalization] Per-variable min–max scaling\n";
             arma::mat full = arma::join_rows(train, test);
             mins.set_size(full.n_rows);
             maxs.set_size(full.n_rows);
@@ -70,19 +71,27 @@ void ApplyNormalization(NormalizationType mode,
 
         case NormalizationType::MLpackMinMax:
         {
-            cout << "[Normalization] MLpack MinMaxScaler (0–1)\n";
-            MinMaxScaler scaler;
-            scaler.Fit(train.rows(0, normalizeOutputs ? train.n_rows - 1 : inputSize - 1));
-            scaler.Transform(train, train);
-            scaler.Transform(test, test);
-            mins.zeros(train.n_rows);
-            maxs.ones(train.n_rows);
+            std::cout << "[Normalization] MLpack MinMaxScaler (0–1)\n";
+            // Compute and store real mins/maxs manually
+            arma::mat full = arma::join_rows(train, test);
+            mins = arma::min(full, 1).t();
+            maxs = arma::max(full, 1).t();
+
+            for (size_t r = 0; r < train.n_rows; ++r)
+            {
+                if (!normalizeOutputs && r >= inputSize)
+                    continue;
+                double minVal = mins[r];
+                double maxVal = maxs[r];
+                train.row(r) = (train.row(r) - minVal) / (maxVal - minVal);
+                test.row(r)  = (test.row(r) - minVal) / (maxVal - minVal);
+            }
             break;
         }
 
         case NormalizationType::ZScore:
         {
-            cout << "[Normalization] Z-Score normalization\n";
+            std::cout << "[Normalization] Z-Score normalization\n";
             mins.set_size(train.n_rows);
             maxs.set_size(train.n_rows);
             for (size_t r = 0; r < train.n_rows; ++r)
@@ -94,7 +103,8 @@ void ApplyNormalization(NormalizationType mode,
                 double mu = mean(train.row(r));
                 double sd = stddev(train.row(r));
                 if (sd < 1e-12) sd = 1.0;
-                mins[r] = mu; maxs[r] = sd;
+                mins[r] = mu;   // store mean
+                maxs[r] = sd;   // store stddev
                 train.row(r) = (train.row(r) - mu) / sd;
                 test.row(r)  = (test.row(r)  - mu) / sd;
             }
@@ -102,9 +112,8 @@ void ApplyNormalization(NormalizationType mode,
         }
 
         default:
-            cout << "[Normalization] None\n";
-            mins.reset();
-            maxs.reset();
+            std::cout << "[Normalization] None\n";
+            mins.reset(); maxs.reset();
     }
 }
 
@@ -186,24 +195,59 @@ void ValidateShapes(const arma::mat& data,
  * ============================================================ */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
-                 const arma::rowvec& /*mins*/,
-                 const arma::rowvec& /*maxs*/,
+                 const arma::rowvec& mins,
+                 const arma::rowvec& maxs,
                  const arma::cube& X,
                  int inputSize,
                  int outputSize,
                  bool IO,
-                 bool /*normalizeOutputs*/)
+                 bool normalizeOutputs,
+                 NormalizationType normType)
 {
-    arma::mat flat = X.slice(X.n_slices - 1);
-    arma::mat pred = predictions.slice(predictions.n_slices - 1);
+    arma::mat flat = X.slice(X.n_slices - 1).t();
+    arma::mat pred = predictions.slice(predictions.n_slices - 1).t();
+    flat.insert_cols(flat.n_cols, pred.cols(pred.n_cols - outputSize, pred.n_cols - 1));
+    arma::mat result = flat;
 
-    // Combine like old SaveResults_old()
-    flat.insert_rows(flat.n_rows, pred.rows(pred.n_rows - outputSize, pred.n_rows - 1));
-    flat.save(filename, arma::csv_ascii);
+    if (normalizeOutputs && mins.n_elem == maxs.n_elem && maxs.n_elem > 0)
+    {
+        switch (normType)
+        {
+            case NormalizationType::PerVariable:
+            case NormalizationType::MLpackMinMax:
+                std::cout << "[SaveResults] Inverse Min–Max scaling\n";
+                for (size_t c = 0; c < result.n_cols && c < mins.n_elem; ++c)
+                {
+                    double minVal = mins[c];
+                    double maxVal = maxs[c];
+                    if (fabs(maxVal - minVal) < 1e-12) continue;
+                    result.col(c) = result.col(c) * (maxVal - minVal) + minVal;
+                }
+                break;
 
-    cout << "✅ Saved predictions → " << filename
-         << " (shape " << flat.n_rows << "×" << flat.n_cols << ")" << endl;
+            case NormalizationType::ZScore:
+                std::cout << "[SaveResults] Inverse Z-Score scaling\n";
+                for (size_t c = 0; c < result.n_cols && c < mins.n_elem; ++c)
+                {
+                    double meanVal = mins[c];
+                    double stdVal  = maxs[c];
+                    result.col(c) = result.col(c) * stdVal + meanVal;
+                }
+                break;
+
+            default:
+                std::cout << "[SaveResults] No inverse scaling\n";
+                break;
+        }
+    }
+    else
+        std::cout << "[SaveResults] Skipped inverse scaling (none or disabled)\n";
+
+    result.save(filename, arma::csv_ascii);
+    std::cout << "✅ Saved predictions → " << filename
+              << " (unscaled values)\n";
 }
+
 
 /* ============================================================
  *                Run Configuration Logging
