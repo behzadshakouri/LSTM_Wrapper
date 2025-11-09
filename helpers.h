@@ -1,37 +1,36 @@
 /**
  * @file helpers.h
- * @brief Utility functions for LSTM Wrapper (normalization, metrics, IO, etc.)
- *
- * Authors:
- *   Behzad Shakouri
- *   Arash Massoudieh
+ * @brief Utility function declarations for LSTM Wrapper
+ *        (normalization, metrics, time-series creation, and logging).
  */
 
 #pragma once
-#include <armadillo>
-#include <string>
-#include <iostream>
 
-// ============================================================
-//  Normalization type definition
-// ============================================================
+#include <armadillo>
+#include <QString>
+#include <QDebug>
+#include <string>
+
+/* ============================================================
+ *                Normalization Types
+ * ============================================================ */
 enum class NormalizationType
 {
-    PerVariable = 0,   ///< Custom per-row min–max scaling
-    MLpackMinMax = 1,  ///< mlpack’s built-in MinMaxScaler
-    ZScore       = 2,  ///< Standardization (mean/std)
-    None         = 3   ///< No normalization
+    PerVariable = 0,
+    MLpackMinMax = 1,
+    ZScore = 2,
+    None = 3
 };
 
-// ============================================================
-//  Function declarations
-// ============================================================
-
-// Metric utilities
+/* ============================================================
+ *                Metrics
+ * ============================================================ */
 double ComputeMSE(arma::cube& pred, arma::cube& Y);
 double ComputeR2(arma::cube& pred, arma::cube& Y);
 
-// Normalization
+/* ============================================================
+ *                Normalization
+ * ============================================================ */
 void ApplyNormalization(NormalizationType mode,
                         arma::mat& train,
                         arma::mat& test,
@@ -40,14 +39,9 @@ void ApplyNormalization(NormalizationType mode,
                         bool normalizeOutputs,
                         size_t inputSize);
 
-// Shape and dataset utilities
-void ValidateShapes(const arma::mat& data,
-                    const arma::cube& X,
-                    const arma::cube& Y,
-                    size_t inputSize,
-                    size_t outputSize,
-                    int rho);
-
+/* ============================================================
+ *                Time-Series Cube Preparation
+ * ============================================================ */
 void CreateTimeSeriesData(const arma::mat& dataset,
                           arma::cube& X,
                           arma::cube& Y,
@@ -56,6 +50,19 @@ void CreateTimeSeriesData(const arma::mat& dataset,
                           int outputSize,
                           bool IO);
 
+/* ============================================================
+ *                Validation and Logging
+ * ============================================================ */
+void ValidateShapes(const arma::mat& data,
+                    const arma::cube& X,
+                    const arma::cube& Y,
+                    size_t inputSize,
+                    size_t outputSize,
+                    int rho);
+
+/* ============================================================
+ *                Output Handling
+ * ============================================================ */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
                  const arma::rowvec& mins,
@@ -66,6 +73,9 @@ void SaveResults(const std::string& filename,
                  bool IO,
                  bool normalizeOutputs);
 
+/* ============================================================
+ *                Run Configuration Logging
+ * ============================================================ */
 void PrintRunConfig(bool ASM, bool IO, bool bTrain, bool bLoadAndTrain,
                     size_t inputSize, size_t outputSize, int rho,
                     double stepSize, size_t epochs, size_t batchSize,

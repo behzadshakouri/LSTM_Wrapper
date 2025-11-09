@@ -165,14 +165,20 @@ void TrainCore(arma::mat& trainData,
              << ", Tol=" << tolerance
              << ", Shuffle=" << std::boolalpha << shuffle << endl;
 
+        const size_t maxIters = trainData.n_cols * epochs;
         Adam optimizer(stepSize, batchSize, beta1, beta2, epsilon,
-                       trainData.n_cols * epochs, tolerance, shuffle);
+                       maxIters, tolerance, shuffle);
 
-        optimizer.Tolerance() = -1; // rely on callbacks / max iters
+        optimizer.Tolerance() = -1;
 
         cout << "Training ..." << endl;
-        model.Train(trainX, trainY, optimizer,
-                    PrintLoss(), ProgressBar(), EarlyStopAtMinLoss());
+        model.Train(trainX,
+                    trainY,
+                    optimizer,
+                    PrintLoss(),
+                    ProgressBar(),
+                    EarlyStopAtMinLoss());
+
         cout << "Finished training.\nSaving Model" << endl;
         data::Save(modelFile, "LSTMMulti", model);
     }

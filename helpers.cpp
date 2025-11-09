@@ -72,7 +72,7 @@ void ApplyNormalization(NormalizationType mode,
         {
             cout << "[Normalization] MLpack MinMaxScaler (0–1)\n";
             MinMaxScaler scaler;
-            scaler.Fit(train);
+            scaler.Fit(train.rows(0, normalizeOutputs ? train.n_rows - 1 : inputSize - 1));
             scaler.Transform(train, train);
             scaler.Transform(test, test);
             mins.zeros(train.n_rows);
@@ -109,7 +109,7 @@ void ApplyNormalization(NormalizationType mode,
 }
 
 /* ============================================================
- *                Validation & Logging Stubs
+ *                Time-Series Cube Creation
  * ============================================================ */
 void CreateTimeSeriesData(const arma::mat& dataset,
                           arma::cube& X,
@@ -120,36 +120,33 @@ void CreateTimeSeriesData(const arma::mat& dataset,
                           bool IO)
 {
     const size_t nSamples = dataset.n_cols - rho;
-    X.set_size(inputSize, rho, nSamples);
-    Y.set_size(outputSize, rho, nSamples);
+    X.set_size(inputSize, nSamples, rho);
+    Y.set_size(outputSize, nSamples, rho);
 
     for (size_t i = 0; i < nSamples; ++i)
     {
-        // Fill each sample (slice) with a window of length ρ
-        X.slice(i) = dataset.submat(0, i,
-                                    inputSize - 1,
-                                    i + rho - 1);
+        // Fill cube in old mlpack RNN format
+        X.subcube(span(), span(i), span()) =
+            dataset.submat(0, i, inputSize - 1, i + rho - 1);
 
         if (!IO)
         {
-            // Targets start one step ahead of inputs
-            Y.slice(i) = dataset.submat(inputSize,
-                                        i + 1,
-                                        inputSize + outputSize - 1,
-                                        i + rho);
+            Y.subcube(span(), span(i), span()) =
+                dataset.submat(inputSize, i + 1,
+                               inputSize + outputSize - 1, i + rho);
         }
         else
         {
-            // IO-type datasets use last output(s) as inputs
-            Y.slice(i) = dataset.submat(inputSize - outputSize,
-                                        i + 1,
-                                        inputSize - 1,
-                                        i + rho);
+            Y.subcube(span(), span(i), span()) =
+                dataset.submat(inputSize - outputSize, i + 1,
+                               inputSize - 1, i + rho);
         }
     }
 }
 
-
+/* ============================================================
+ *                Shape Validation
+ * ============================================================ */
 void ValidateShapes(const arma::mat& data,
                     const arma::cube& X,
                     const arma::cube& Y,
@@ -171,11 +168,11 @@ void ValidateShapes(const arma::mat& data,
                    << ") != outputSize (" << outputSize << ")";
         ok = false;
     }
-    if (X.n_cols != (size_t)rho || Y.n_cols != (size_t)rho)
+    if (X.n_slices != (size_t)rho || Y.n_slices != (size_t)rho)
     {
         qWarning() << "rho mismatch → expected" << rho
-                   << "got X.n_cols=" << X.n_cols
-                   << ", Y.n_cols=" << Y.n_cols;
+                   << "got X.n_slices=" << X.n_slices
+                   << ", Y.n_slices=" << Y.n_slices;
         ok = false;
     }
     if (ok)
@@ -184,22 +181,33 @@ void ValidateShapes(const arma::mat& data,
                           << ", Y" << Y.n_rows << "×" << Y.n_cols << "×" << Y.n_slices;
 }
 
-
+/* ============================================================
+ *                Save Results (CSV)
+ * ============================================================ */
 void SaveResults(const std::string& filename,
                  const arma::cube& predictions,
-                 const arma::rowvec& mins,
-                 const arma::rowvec& maxs,
+                 const arma::rowvec& /*mins*/,
+                 const arma::rowvec& /*maxs*/,
                  const arma::cube& X,
                  int inputSize,
                  int outputSize,
                  bool IO,
-                 bool normalizeOutputs)
+                 bool /*normalizeOutputs*/)
 {
-    arma::mat out = predictions.slice(predictions.n_slices - 1);
-    out.save(filename, arma::csv_ascii);
-    cout << "✅ Saved predictions → " << filename << endl;
+    arma::mat flat = X.slice(X.n_slices - 1);
+    arma::mat pred = predictions.slice(predictions.n_slices - 1);
+
+    // Combine like old SaveResults_old()
+    flat.insert_rows(flat.n_rows, pred.rows(pred.n_rows - outputSize, pred.n_rows - 1));
+    flat.save(filename, arma::csv_ascii);
+
+    cout << "✅ Saved predictions → " << filename
+         << " (shape " << flat.n_rows << "×" << flat.n_cols << ")" << endl;
 }
 
+/* ============================================================
+ *                Run Configuration Logging
+ * ============================================================ */
 void PrintRunConfig(bool ASM, bool IO, bool bTrain, bool bLoadAndTrain,
                     size_t inputSize, size_t outputSize, int rho,
                     double stepSize, size_t epochs, size_t batchSize,

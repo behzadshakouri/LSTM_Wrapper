@@ -38,7 +38,7 @@ int main()
     // ============================================================
     // Normalization Configuration
     // ============================================================
-    int normTypeInt = 0;  // 0=PerVariable, 1=MLpackMinMax, 2=ZScore, 3=None
+    int normTypeInt = 1;  // 0=PerVariable, 1=MLpackMinMax, 2=ZScore, 3=None
     NormalizationType normType = static_cast<NormalizationType>(normTypeInt);
 
     // ============================================================
