@@ -15,6 +15,8 @@ DEFINES += GSL
 CONFIG  += PowerEdge
 DEFINES += PowerEdge
 
+DEFINES += MLPACK_ENABLE_ANN_SERIALIZATION
+
 # Uncomment if building on other systems
 # CONFIG += Behzad
 # DEFINES += Behzad
