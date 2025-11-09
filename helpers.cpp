@@ -198,17 +198,25 @@ void SaveResults(const std::string& filename,
                  const arma::rowvec& mins,
                  const arma::rowvec& maxs,
                  const arma::cube& X,
+                 const arma::cube& Y,
                  int inputSize,
                  int outputSize,
                  bool IO,
                  bool normalizeOutputs,
                  NormalizationType normType)
 {
-    arma::mat flat = X.slice(X.n_slices - 1).t();
-    arma::mat pred = predictions.slice(predictions.n_slices - 1).t();
+    // Flatten last slices
+    arma::mat flat = X.slice(X.n_slices - 1).t();  // Input columns
+    arma::mat obs  = Y.slice(Y.n_slices - 1).t();  // Observed outputs
+    arma::mat pred = predictions.slice(predictions.n_slices - 1).t(); // Predicted outputs
+
+    // Combine: inputs | observed | predicted
+    flat.insert_cols(flat.n_cols, obs.cols(obs.n_cols - outputSize, obs.n_cols - 1));
     flat.insert_cols(flat.n_cols, pred.cols(pred.n_cols - outputSize, pred.n_cols - 1));
+
     arma::mat result = flat;
 
+    // Optional inverse scaling
     if (normalizeOutputs && mins.n_elem == maxs.n_elem && maxs.n_elem > 0)
     {
         switch (normType)
@@ -243,9 +251,10 @@ void SaveResults(const std::string& filename,
     else
         std::cout << "[SaveResults] Skipped inverse scaling (none or disabled)\n";
 
+    // Save CSV
     result.save(filename, arma::csv_ascii);
     std::cout << "✅ Saved predictions → " << filename
-              << " (unscaled values)\n";
+              << " (" << result.n_cols << " cols: inputs + observed + predicted)\n";
 }
 
 
