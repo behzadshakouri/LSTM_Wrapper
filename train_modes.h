@@ -194,3 +194,16 @@ void TrainKFold_WithMode(const std::string& dataFile,
                          double epsilon, double tolerance,
                          bool shuffle, bool normalizeOutputs,
                          NormalizationType normType = NormalizationType::PerVariable);
+
+/* ============================================================
+ *                 GridSearch_LSTM
+ * ============================================================ */
+
+void GridSearch_LSTM(const std::string& dataFile,
+                     const std::string& resultsCSV,
+                     const std::string& modelFolder,
+                     size_t inputSize,
+                     size_t outputSize,
+                     bool IO,
+                     bool normalizeOutputs,
+                     NormalizationType normType);

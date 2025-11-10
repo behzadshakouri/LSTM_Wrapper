@@ -68,7 +68,7 @@ int main()
     // ============================================================
     // Training Mode Configuration
     // ============================================================
-    int mode = 0;          ///< 0 = single train/test, 1 = KFold CV
+    int mode = 2;          ///< 0 = single train/test, 1 = KFold CV, 2 = Grid Search
     int kfoldMode = 2;     ///< 0 = Random, 1 = TimeSeries, 2 = FixedRatio
     int KFOLDS = 10;
     const double RATIO_SINGLE = 0.3; ///< Train/test split (70/30)
@@ -120,7 +120,7 @@ int main()
                     BETA1, BETA2, EPSILON, TOLERANCE,
                     SHUFFLE, NORMALIZE_OUTPUTS, normType);
     }
-    else
+    else if (mode == 1)
     {
         qInfo().noquote() << "Running K-Fold Cross-Validation...";
         TrainKFold_WithMode(dataFile, modelFile, predFile_Test, predFile_Train,
@@ -132,11 +132,23 @@ int main()
                             BETA1, BETA2, EPSILON, TOLERANCE,
                             SHUFFLE, NORMALIZE_OUTPUTS, normType);
     }
+    else if (mode == 2)
+    {
+        qInfo().noquote() << "Running Grid Search...";
+        GridSearch_LSTM(
+            path + "Data/observedoutput_" + data_name + ".txt",
+            path + "Results/grid_results.csv",
+            path + "Results",
+            inputSize,
+            outputSize,
+            IO,
+            NORMALIZE_OUTPUTS,
+            NormalizationType::PerVariable);
+    }
 
     qInfo().noquote() << "✅ Training process completed successfully.";
     return 0;
 }
-
 
 
 //--------------------------------------------------------------------------------------------------

@@ -20,6 +20,8 @@
 #include <iostream>
 #include <stdexcept>
 
+#include <fstream>  // for CSV output
+
 using namespace std;
 using namespace arma;
 using namespace mlpack;
@@ -356,4 +358,119 @@ void TrainKFold_WithMode(const std::string& dataFile,
                     H1, H2, H3,
                     beta1, beta2, epsilon, tolerance,
                     shuffle, normalizeOutputs, normType);
+}
+
+/* ============================================================
+ *                 GridSearch_LSTM
+ * ============================================================ */
+
+void GridSearch_LSTM(const std::string& dataFile,
+                     const std::string& resultsCSV,
+                     const std::string& modelFolder,
+                     size_t inputSize,
+                     size_t outputSize,
+                     bool IO,
+                     bool normalizeOutputs,
+                     NormalizationType normType)
+{
+    // Parameter grids
+    std::vector<int>    rhoList       = {8, 12, 24};
+    std::vector<double> stepSizeList  = {0.001, 0.0005, 0.0001};
+    std::vector<std::tuple<int,int,int>> layerSets = {
+        {64, 32, 16},
+        {128, 64, 32}
+    };
+
+    // Constants for all runs
+    size_t epochs     = 800;
+    size_t batchSize  = 32;
+    bool bTrain       = true;
+    bool bLoadAndTrain= false;
+    bool shuffle      = true;
+
+    // Output CSV
+    std::ofstream log(resultsCSV);
+    log << "rho,stepSize,H1,H2,H3,Train_MSE,Test_MSE,Train_R2,Test_R2\n";
+
+    arma::mat dataset;
+    data::Load(dataFile, dataset, true);
+    dataset = dataset.submat(1, 1, dataset.n_rows - 1, dataset.n_cols - 1);
+
+    arma::mat trainData, testData;
+    data::Split(dataset, trainData, testData, 0.7, false);
+
+    int run = 0;
+    for (int rho : rhoList)
+    {
+        for (double step : stepSizeList)
+        {
+            for (auto [H1, H2, H3] : layerSets)
+            {
+                ++run;
+                std::string modelFile  = modelFolder + "/model_rho" + std::to_string(rho)
+                                       + "_lr" + std::to_string(step)
+                                       + "_H" + std::to_string(H1) + "-" + std::to_string(H2) + "-" + std::to_string(H3) + ".bin";
+
+                std::string predFile_Test  = modelFolder + "/pred_test_rho" + std::to_string(rho)
+                                           + "_lr" + std::to_string(step)
+                                           + "_H" + std::to_string(H1) + "-" + std::to_string(H2) + "-" + std::to_string(H3) + ".csv";
+                std::string predFile_Train = modelFolder + "/pred_train_rho" + std::to_string(rho)
+                                           + "_lr" + std::to_string(step)
+                                           + "_H" + std::to_string(H1) + "-" + std::to_string(H2) + "-" + std::to_string(H3) + ".csv";
+
+                std::cout << "\n========== Grid Search Run " << run << " ==========\n";
+                std::cout << "rho=" << rho << ", step=" << step
+                          << ", H1=" << H1 << ", H2=" << H2 << ", H3=" << H3 << "\n";
+
+                arma::rowvec mins, maxs;
+                ApplyNormalization(normType, trainData, testData, mins, maxs,
+                                   normalizeOutputs, inputSize);
+
+                arma::cube trainX(inputSize, trainData.n_cols - rho, rho);
+                arma::cube trainY(outputSize, trainData.n_cols - rho, rho);
+                arma::cube testX (inputSize, testData.n_cols  - rho, rho);
+                arma::cube testY (outputSize, testData.n_cols - rho, rho);
+
+                CreateTimeSeriesData(trainData, trainX, trainY, rho, (int)inputSize, (int)outputSize, IO);
+                CreateTimeSeriesData(testData , testX , testY , rho, (int)inputSize, (int)outputSize, IO);
+
+                RNN<MeanSquaredError, HeInitialization> model(rho);
+                model.Add<Linear>(inputSize);
+                model.Add<LSTM>(H1);
+                model.Add<LSTM>(H2);
+                model.Add<LSTM>(H3);
+                model.Add<ReLU>();
+                model.Add<Linear>(outputSize);
+
+                Adam optimizer(step, batchSize, 0.9, 0.999, 1e-8,
+                               trainData.n_cols * epochs, 1e-6, shuffle);
+                optimizer.Tolerance() = -1;
+
+                model.Train(trainX, trainY, optimizer,
+                            PrintLoss(),
+                            ProgressBar(),
+                            EarlyStopAtMinLoss());
+
+                arma::cube predTrain, predTest;
+                model.Predict(trainX, predTrain);
+                model.Predict(testX,  predTest);
+
+                double mseTrain = ComputeMSE(predTrain, trainY);
+                double mseTest  = ComputeMSE(predTest,  testY);
+                double r2Train  = ComputeR2(predTrain,  trainY);
+                double r2Test   = ComputeR2(predTest,   testY);
+
+                log << rho << "," << step << "," << H1 << "," << H2 << "," << H3 << ","
+                    << mseTrain << "," << mseTest << "," << r2Train << "," << r2Test << "\n";
+
+                SaveResults(predFile_Test,  predTest,  mins, maxs, testX,  testY,
+                            (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
+                SaveResults(predFile_Train, predTrain, mins, maxs, trainX, trainY,
+                            (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
+            }
+        }
+    }
+
+    log.close();
+    std::cout << "\n✅ Grid search completed. Results saved to " << resultsCSV << "\n";
 }
