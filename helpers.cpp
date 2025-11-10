@@ -194,67 +194,75 @@ void ValidateShapes(const arma::mat& data,
  *                Save Results (CSV)
  * ============================================================ */
 void SaveResults(const std::string& filename,
-                 const arma::cube& predictions,
+                 arma::cube predictions,   // scaled predictions
                  const arma::rowvec& mins,
                  const arma::rowvec& maxs,
-                 const arma::cube& X,
-                 const arma::cube& Y,
+                 arma::cube X,              // scaled inputs
+                 arma::cube Y,              // scaled observed
                  int inputSize,
                  int outputSize,
                  bool IO,
                  bool normalizeOutputs,
                  NormalizationType normType)
 {
-    // Flatten last slices
-    arma::mat flat = X.slice(X.n_slices - 1).t();  // Input columns
-    arma::mat obs  = Y.slice(Y.n_slices - 1).t();  // Observed outputs
-    arma::mat pred = predictions.slice(predictions.n_slices - 1).t(); // Predicted outputs
+    using arma::uword;
 
-    // Combine: inputs | observed | predicted
-    flat.insert_cols(flat.n_cols, obs.cols(obs.n_cols - outputSize, obs.n_cols - 1));
-    flat.insert_cols(flat.n_cols, pred.cols(pred.n_cols - outputSize, pred.n_cols - 1));
+    // Use the same slice index for all (aligned)
+    uword sliceIndex = std::min({X.n_slices, Y.n_slices, predictions.n_slices}) - 1;
 
-    arma::mat result = flat;
+    arma::mat x = X.slice(sliceIndex).t();        // inputs (scaled)
+    arma::mat y = Y.slice(sliceIndex).t();        // observed (scaled)
+    arma::mat p = predictions.slice(sliceIndex).t(); // predicted (scaled)
 
-    // Optional inverse scaling
+    // === Inverse-scale all three matrices before combining ===
     if (normalizeOutputs && mins.n_elem == maxs.n_elem && maxs.n_elem > 0)
     {
-        switch (normType)
+        // Inputs
+        for (int j = 0; j < inputSize && j < (int)mins.n_elem; ++j)
         {
-            case NormalizationType::PerVariable:
-            case NormalizationType::MLpackMinMax:
-                std::cout << "[SaveResults] Inverse Min–Max scaling\n";
-                for (size_t c = 0; c < result.n_cols && c < mins.n_elem; ++c)
-                {
-                    double minVal = mins[c];
-                    double maxVal = maxs[c];
-                    if (fabs(maxVal - minVal) < 1e-12) continue;
-                    result.col(c) = result.col(c) * (maxVal - minVal) + minVal;
-                }
-                break;
+            double a = mins[j], b = maxs[j];
+            if (normType == NormalizationType::ZScore)
+                x.col(j) = x.col(j) * b + a;
+            else if (fabs(b - a) > 1e-12)
+                x.col(j) = x.col(j) * (b - a) + a;
+        }
 
-            case NormalizationType::ZScore:
-                std::cout << "[SaveResults] Inverse Z-Score scaling\n";
-                for (size_t c = 0; c < result.n_cols && c < mins.n_elem; ++c)
-                {
-                    double meanVal = mins[c];
-                    double stdVal  = maxs[c];
-                    result.col(c) = result.col(c) * stdVal + meanVal;
-                }
-                break;
-
-            default:
-                std::cout << "[SaveResults] No inverse scaling\n";
-                break;
+        // Observed + Predicted outputs
+        for (int j = 0; j < outputSize && inputSize + j < (int)mins.n_elem; ++j)
+        {
+            double a = mins[inputSize + j], b = maxs[inputSize + j];
+            if (normType == NormalizationType::ZScore)
+            {
+                y.col(j) = y.col(j) * b + a;
+                p.col(j) = p.col(j) * b + a;
+            }
+            else if (fabs(b - a) > 1e-12)
+            {
+                y.col(j) = y.col(j) * (b - a) + a;
+                p.col(j) = p.col(j) * (b - a) + a;
+            }
         }
     }
-    else
-        std::cout << "[SaveResults] Skipped inverse scaling (none or disabled)\n";
 
-    // Save CSV
+    // === Keep all rows directly aligned (no time-step shift) ===
+    uword N = std::min({x.n_rows, y.n_rows, p.n_rows});
+    x = x.rows(0, N - 1);
+    y = y.rows(0, N - 1);
+    p = p.rows(0, N - 1);
+
+    // === Combine → [inputs | observed | predicted] ===
+    arma::mat result = x;
+    result.insert_cols(result.n_cols, y.cols(y.n_cols - outputSize, y.n_cols - 1));
+    result.insert_cols(result.n_cols, p.cols(p.n_cols - outputSize, p.n_cols - 1));
+
+    // === Save ===
     result.save(filename, arma::csv_ascii);
-    std::cout << "✅ Saved predictions → " << filename
-              << " (" << result.n_cols << " cols: inputs + observed + predicted)\n";
+
+    std::cout << "✅ Saved → " << filename
+              << " (" << result.n_rows << "×" << result.n_cols
+              << " = " << inputSize << " inputs + "
+              << outputSize << " observed + "
+              << outputSize << " predicted, all unscaled & time-synced)\n";
 }
 
 

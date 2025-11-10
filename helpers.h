@@ -74,11 +74,11 @@ void ValidateShapes(const arma::mat& data,
  * columns are the data used to generate those predictions.
  */
 void SaveResults(const std::string& filename,
-                 const arma::cube& predictions,
+                 arma::cube predictions,   // scaled predictions
                  const arma::rowvec& mins,
                  const arma::rowvec& maxs,
-                 const arma::cube& X,
-                 const arma::cube& Y,
+                 arma::cube X,              // scaled inputs
+                 arma::cube Y,              // scaled observed
                  int inputSize,
                  int outputSize,
                  bool IO,
