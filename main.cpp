@@ -38,7 +38,7 @@ int main()
     // ============================================================
     // Normalization Configuration
     // ============================================================
-    int normTypeInt = 1;  // 0=PerVariable, 1=MLpackMinMax, 2=ZScore, 3=None
+    int normTypeInt = 2;  // 0=PerVariable, 1=MLpackMinMax, 2=ZScore, 3=None
     NormalizationType normType = static_cast<NormalizationType>(normTypeInt);
 
     // ============================================================
@@ -48,7 +48,7 @@ int main()
     const size_t outputSize = 1;    ///< Number of output variables
     const int rho           = 1;    ///< Sequence length (lag)
     const double STEP_SIZE  = 5e-5; ///< Adam learning rate
-    const size_t EPOCHS     = 1; ///< Number of training epochs
+    const size_t EPOCHS     = 1000; ///< Number of training epochs
     const size_t BATCH_SIZE = 16;   ///< Mini-batch size
 
     // ============================================================
