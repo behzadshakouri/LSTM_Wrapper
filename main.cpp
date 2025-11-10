@@ -68,7 +68,7 @@ int main()
     // ============================================================
     // Training Mode Configuration
     // ============================================================
-    int mode = 2;          ///< 0 = single train/test, 1 = KFold CV, 2 = Grid Search
+    int mode = 0;          ///< 0 = single train/test, 1 = KFold CV, 2 = Grid Search
     int kfoldMode = 2;     ///< 0 = Random, 1 = TimeSeries, 2 = FixedRatio
     int KFOLDS = 10;
     const double RATIO_SINGLE = 0.3; ///< Train/test split (70/30)
