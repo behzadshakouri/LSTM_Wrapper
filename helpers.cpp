@@ -22,7 +22,6 @@ double ComputeMSE(const arma::cube& pred, const arma::cube& Y)
 
 double ComputeR2(const arma::cube& pred, const arma::cube& Y)
 {
-    // Manual size check (works for all Armadillo versions)
     if (pred.n_rows != Y.n_rows ||
         pred.n_cols != Y.n_cols ||
         pred.n_slices != Y.n_slices)
@@ -51,7 +50,8 @@ void ApplyNormalization(NormalizationType mode,
                         arma::rowvec& mins,
                         arma::rowvec& maxs,
                         bool normalizeOutputs,
-                        size_t inputSize)
+                        size_t inputSize,
+                        bool normalizeOnlyOutputs)
 {
     switch (mode)
     {
@@ -61,12 +61,21 @@ void ApplyNormalization(NormalizationType mode,
             arma::mat full = arma::join_rows(train, test);
             mins.set_size(full.n_rows);
             maxs.set_size(full.n_rows);
+
             for (size_t r = 0; r < full.n_rows; ++r)
             {
-                if (!normalizeOutputs && r >= inputSize)
+                bool isInput  = (r < inputSize);
+                bool isOutput = (r >= inputSize);
+
+                if (normalizeOnlyOutputs && isInput)
                 {
                     mins[r] = 0; maxs[r] = 1; continue;
                 }
+                if (!normalizeOutputs && isOutput)
+                {
+                    mins[r] = 0; maxs[r] = 1; continue;
+                }
+
                 double minVal = full.row(r).min();
                 double maxVal = full.row(r).max();
                 if (fabs(maxVal - minVal) < 1e-12)
@@ -82,17 +91,25 @@ void ApplyNormalization(NormalizationType mode,
         case NormalizationType::MLpackMinMax:
         {
             std::cout << "[Normalization] MLpack MinMaxScaler (0–1)\n";
-            // Compute and store real mins/maxs manually
             arma::mat full = arma::join_rows(train, test);
             mins = arma::min(full, 1).t();
             maxs = arma::max(full, 1).t();
 
             for (size_t r = 0; r < train.n_rows; ++r)
             {
-                if (!normalizeOutputs && r >= inputSize)
+                bool isInput  = (r < inputSize);
+                bool isOutput = (r >= inputSize);
+
+                if (normalizeOnlyOutputs && isInput)
                     continue;
+                if (!normalizeOutputs && isOutput)
+                    continue;
+
                 double minVal = mins[r];
                 double maxVal = maxs[r];
+                if (fabs(maxVal - minVal) < 1e-12)
+                    maxVal = minVal + 1e-12;
+
                 train.row(r) = (train.row(r) - minVal) / (maxVal - minVal);
                 test.row(r)  = (test.row(r) - minVal) / (maxVal - minVal);
             }
@@ -106,15 +123,23 @@ void ApplyNormalization(NormalizationType mode,
             maxs.set_size(train.n_rows);
             for (size_t r = 0; r < train.n_rows; ++r)
             {
-                if (!normalizeOutputs && r >= inputSize)
+                bool isInput  = (r < inputSize);
+                bool isOutput = (r >= inputSize);
+
+                if (normalizeOnlyOutputs && isInput)
                 {
                     mins[r] = 0; maxs[r] = 1; continue;
                 }
-                double mu = mean(train.row(r));
-                double sd = stddev(train.row(r));
+                if (!normalizeOutputs && isOutput)
+                {
+                    mins[r] = 0; maxs[r] = 1; continue;
+                }
+
+                double mu = arma::mean(train.row(r));
+                double sd = arma::stddev(train.row(r));
                 if (sd < 1e-12) sd = 1.0;
-                mins[r] = mu;   // store mean
-                maxs[r] = sd;   // store stddev
+                mins[r] = mu;
+                maxs[r] = sd;
                 train.row(r) = (train.row(r) - mu) / sd;
                 test.row(r)  = (test.row(r)  - mu) / sd;
             }
@@ -144,7 +169,6 @@ void CreateTimeSeriesData(const arma::mat& dataset,
 
     for (size_t i = 0; i < nSamples; ++i)
     {
-        // Fill cube in old mlpack RNN format
         X.subcube(span(), span(i), span()) =
             dataset.submat(0, i, inputSize - 1, i + rho - 1);
 
@@ -213,6 +237,7 @@ void SaveResults(const std::string& filename,
                  int outputSize,
                  bool IO,
                  bool normalizeOutputs,
+                 bool normalizeOnlyOutputs,
                  NormalizationType normType)
 {
     using arma::uword;
@@ -224,32 +249,41 @@ void SaveResults(const std::string& filename,
     arma::mat y = Y.slice(sliceIndex).t();        // observed (scaled)
     arma::mat p = predictions.slice(sliceIndex).t(); // predicted (scaled)
 
-    // === Inverse-scale all three matrices before combining ===
-    if (normalizeOutputs && mins.n_elem == maxs.n_elem && maxs.n_elem > 0)
+    // === Inverse-scale based on normalization flags ===
+    if (mins.n_elem == maxs.n_elem && maxs.n_elem > 0)
     {
-        // Inputs
-        for (int j = 0; j < inputSize && j < (int)mins.n_elem; ++j)
+        bool inverseInputs  = !normalizeOnlyOutputs;   // inverse inputs unless only outputs were normalized
+        bool inverseOutputs = (normalizeOutputs || normalizeOnlyOutputs); // inverse outputs if either flag true
+
+        // --- Inverse inputs ---
+        if (inverseInputs)
         {
-            double a = mins[j], b = maxs[j];
-            if (normType == NormalizationType::ZScore)
-                x.col(j) = x.col(j) * b + a;
-            else if (fabs(b - a) > 1e-12)
-                x.col(j) = x.col(j) * (b - a) + a;
+            for (int j = 0; j < inputSize && j < (int)mins.n_elem; ++j)
+            {
+                double a = mins[j], b = maxs[j];
+                if (normType == NormalizationType::ZScore)
+                    x.col(j) = x.col(j) * b + a;
+                else if (fabs(b - a) > 1e-12)
+                    x.col(j) = x.col(j) * (b - a) + a;
+            }
         }
 
-        // Observed + Predicted outputs
-        for (int j = 0; j < outputSize && inputSize + j < (int)mins.n_elem; ++j)
+        // --- Inverse outputs ---
+        if (inverseOutputs)
         {
-            double a = mins[inputSize + j], b = maxs[inputSize + j];
-            if (normType == NormalizationType::ZScore)
+            for (int j = 0; j < outputSize && inputSize + j < (int)mins.n_elem; ++j)
             {
-                y.col(j) = y.col(j) * b + a;
-                p.col(j) = p.col(j) * b + a;
-            }
-            else if (fabs(b - a) > 1e-12)
-            {
-                y.col(j) = y.col(j) * (b - a) + a;
-                p.col(j) = p.col(j) * (b - a) + a;
+                double a = mins[inputSize + j], b = maxs[inputSize + j];
+                if (normType == NormalizationType::ZScore)
+                {
+                    y.col(j) = y.col(j) * b + a;
+                    p.col(j) = p.col(j) * b + a;
+                }
+                else if (fabs(b - a) > 1e-12)
+                {
+                    y.col(j) = y.col(j) * (b - a) + a;
+                    p.col(j) = p.col(j) * (b - a) + a;
+                }
             }
         }
     }
@@ -268,11 +302,20 @@ void SaveResults(const std::string& filename,
     // === Save ===
     result.save(filename, arma::csv_ascii);
 
+    std::string desc;
+    if (normalizeOnlyOutputs)
+        desc = "outputs unscaled only";
+    else if (normalizeOutputs)
+        desc = "inputs & outputs unscaled";
+    else
+        desc = "inputs unscaled only";
+
     std::cout << "✅ Saved → " << filename
               << " (" << result.n_rows << "×" << result.n_cols
               << " = " << inputSize << " inputs + "
               << outputSize << " observed + "
-              << outputSize << " predicted, all unscaled & time-synced)\n";
+              << outputSize << " predicted, "
+              << desc << ", time-synced)\n";
 }
 
 

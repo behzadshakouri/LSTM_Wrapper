@@ -32,6 +32,7 @@ int main()
     const bool bTrain = true;            ///< Train a new model
     const bool bLoadAndTrain = false;    ///< Continue training existing model
     const bool NORMALIZE_OUTPUTS = true; ///< Normalize both inputs and outputs
+    const bool NORMALIZE_ONLY_OUTPUTS = false; ///< Normalize only outputs not inputs
 
     std::string data_name = "NO"; ///< Target variable (e.g., NO, NH, sCOD, TKN, VSS, ND)
 
@@ -118,7 +119,7 @@ int main()
                     bTrain, bLoadAndTrain,
                     H1, H2, H3,
                     BETA1, BETA2, EPSILON, TOLERANCE,
-                    SHUFFLE, NORMALIZE_OUTPUTS, normType);
+                    SHUFFLE, NORMALIZE_OUTPUTS, normType, NORMALIZE_ONLY_OUTPUTS);
     }
     else if (mode == 1)
     {
@@ -130,7 +131,7 @@ int main()
                             kfoldMode, trainRatio, testHoldout,
                             H1, H2, H3,
                             BETA1, BETA2, EPSILON, TOLERANCE,
-                            SHUFFLE, NORMALIZE_OUTPUTS, normType);
+                            SHUFFLE, NORMALIZE_OUTPUTS, normType, NORMALIZE_ONLY_OUTPUTS);
     }
     else if (mode == 2)
     {
@@ -143,7 +144,8 @@ int main()
             outputSize,
             IO,
             NORMALIZE_OUTPUTS,
-            NormalizationType::PerVariable);
+            NormalizationType::PerVariable,
+            NORMALIZE_ONLY_OUTPUTS);
     }
 
     qInfo().noquote() << "✅ Training process completed successfully.";

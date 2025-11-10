@@ -19,7 +19,6 @@
 #include <ensmallen.hpp>
 #include <iostream>
 #include <stdexcept>
-
 #include <fstream>  // for CSV output
 
 using namespace std;
@@ -110,25 +109,50 @@ static auto KFoldSplit_FixedRatio(const arma::mat& data,
  * ============================================================ */
 
 void TrainCore(arma::mat& trainData,
-                      arma::mat& testData,
-                      const std::string& modelFile,
-                      const std::string& predFile_Test,
-                      const std::string& predFile_Train,
-                      size_t inputSize, size_t outputSize,
-                      int rho, double stepSize, size_t epochs,
-                      size_t batchSize, bool IO,
-                      bool bTrain, bool bLoadAndTrain,
-                      int H1, int H2, int H3,
-                      double beta1, double beta2,
-                      double epsilon, double tolerance,
-                      bool shuffle, bool normalizeOutputs,
-                      NormalizationType normType)
+               arma::mat& testData,
+               const std::string& modelFile,
+               const std::string& predFile_Test,
+               const std::string& predFile_Train,
+               size_t inputSize, size_t outputSize,
+               int rho, double stepSize, size_t epochs,
+               size_t batchSize, bool IO,
+               bool bTrain, bool bLoadAndTrain,
+               int H1, int H2, int H3,
+               double beta1, double beta2,
+               double epsilon, double tolerance,
+               bool shuffle, bool normalizeOutputs,
+               NormalizationType normType,
+               bool normalize_only_Outputs)
 {
-    arma::rowvec mins, maxs; // used by SaveResults
+    arma::rowvec mins, maxs;
 
     /* ------------------- Normalization ------------------- */
     ApplyNormalization(normType, trainData, testData, mins, maxs,
-                       normalizeOutputs, inputSize);
+                       normalizeOutputs, inputSize, normalize_only_Outputs);
+
+    /* ------------------- Save Normalized Data ------------------- */
+    {
+        std::string normPath = "/mnt/3rd900/Projects/LSTM_Wrapper/Results/";
+        std::string trainFile = normPath + "trainData_normalized.csv";
+        std::string testFile  = normPath + "testData_normalized.csv";
+        std::string minsFile  = normPath + "scaling_mins.csv";
+        std::string maxsFile  = normPath + "scaling_maxs.csv";
+
+        // Transpose for human readability: rows = samples, cols = features
+        arma::mat trainT = trainData.t();
+        arma::mat testT  = testData.t();
+
+        trainT.save(trainFile, arma::csv_ascii);
+        testT.save(testFile, arma::csv_ascii);
+        mins.save(minsFile, arma::csv_ascii);
+        maxs.save(maxsFile, arma::csv_ascii);
+
+        std::cout << "✅ Saved normalized datasets and scaling parameters (transposed for readability):\n"
+                  << "   • " << trainFile << "\n"
+                  << "   • " << testFile << "\n"
+                  << "   • " << minsFile << "\n"
+                  << "   • " << maxsFile << "\n";
+    }
 
     /* ------------------- Time-Series Cube Preparation ------------------- */
     arma::cube trainX(inputSize, trainData.n_cols - rho, rho);
@@ -170,7 +194,6 @@ void TrainCore(arma::mat& trainData,
         const size_t maxIters = trainData.n_cols * epochs;
         Adam optimizer(stepSize, batchSize, beta1, beta2, epsilon,
                        maxIters, tolerance, shuffle);
-
         optimizer.Tolerance() = -1;
 
         cout << "Training ..." << endl;
@@ -203,11 +226,10 @@ void TrainCore(arma::mat& trainData,
 
     /* ------------------- Save Results ------------------- */
     SaveResults(predFile_Test,  predTest,  mins, maxs, testX,  testY,
-                (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
+                (int)inputSize, (int)outputSize, IO, normalizeOutputs, normalize_only_Outputs, normType);
 
     SaveResults(predFile_Train, predTrain, mins, maxs, trainX, trainY,
-                (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
-
+                (int)inputSize, (int)outputSize, IO, normalizeOutputs, normalize_only_Outputs, normType);
 }
 
 /* ============================================================
@@ -227,7 +249,8 @@ void TrainSingle(const std::string& dataFile,
                  double beta1, double beta2,
                  double epsilon, double tolerance,
                  bool shuffle, bool normalizeOutputs,
-                 NormalizationType normType)
+                 NormalizationType normType,
+                 bool normalize_only_Outputs)
 {
     arma::mat dataset;
     data::Load(dataFile, dataset, true);
@@ -241,7 +264,7 @@ void TrainSingle(const std::string& dataFile,
               batchSize, IO, bTrain, bLoadAndTrain,
               H1, H2, H3,
               beta1, beta2, epsilon, tolerance,
-              shuffle, normalizeOutputs, normType);
+              shuffle, normalizeOutputs, normType, normalize_only_Outputs);
 }
 
 /* ============================================================
@@ -264,7 +287,8 @@ static void TrainKFold_Impl(const std::string& dataFile,
                             double beta1, double beta2,
                             double epsilon, double tolerance,
                             bool shuffle, bool normalizeOutputs,
-                            NormalizationType normType)
+                            NormalizationType normType,
+                            bool normalize_only_Outputs)
 {
     arma::mat dataset;
     data::Load(dataFile, dataset, true);
@@ -295,7 +319,7 @@ static void TrainKFold_Impl(const std::string& dataFile,
                   batchSize, IO, true, false,
                   H1, H2, H3,
                   beta1, beta2, epsilon, tolerance,
-                  shuffle, normalizeOutputs, normType);
+                  shuffle, normalizeOutputs, normType, normalize_only_Outputs);
     }
 
     cout << "\n✅ TrainKFold completed successfully.\n";
@@ -318,7 +342,8 @@ void TrainKFold(const std::string& dataFile,
                 double beta1, double beta2,
                 double epsilon, double tolerance,
                 bool shuffle, bool normalizeOutputs,
-                NormalizationType normType)
+                NormalizationType normType,
+                bool normalize_only_Outputs)
 {
     TrainKFold_Impl(dataFile, modelFile, predFile_Test, predFile_Train,
                     inputSize, outputSize, rho, kfolds,
@@ -327,7 +352,8 @@ void TrainKFold(const std::string& dataFile,
                     KFoldMode::TimeSeries, 0.9, 0.3,
                     H1, H2, H3,
                     beta1, beta2, epsilon, tolerance,
-                    shuffle, normalizeOutputs, normType);
+                    shuffle, normalizeOutputs, normType,
+                    normalize_only_Outputs);
 }
 
 void TrainKFold_WithMode(const std::string& dataFile,
@@ -344,7 +370,8 @@ void TrainKFold_WithMode(const std::string& dataFile,
                          double beta1, double beta2,
                          double epsilon, double tolerance,
                          bool shuffle, bool normalizeOutputs,
-                         NormalizationType normType)
+                         NormalizationType normType,
+                         bool normalize_only_Outputs)
 {
     KFoldMode mode = (modeInt == 0) ? KFoldMode::Random :
                      (modeInt == 1) ? KFoldMode::TimeSeries :
@@ -357,7 +384,8 @@ void TrainKFold_WithMode(const std::string& dataFile,
                     mode, trainRatio, testHoldout,
                     H1, H2, H3,
                     beta1, beta2, epsilon, tolerance,
-                    shuffle, normalizeOutputs, normType);
+                    shuffle, normalizeOutputs, normType,
+                    normalize_only_Outputs);
 }
 
 /* ============================================================
@@ -371,7 +399,8 @@ void GridSearch_LSTM(const std::string& dataFile,
                      size_t outputSize,
                      bool IO,
                      bool normalizeOutputs,
-                     NormalizationType normType)
+                     NormalizationType normType,
+                     bool normalize_only_Outputs)
 {
     // Parameter grids
     std::vector<int>    rhoList       = {8, 12, 24};
@@ -381,14 +410,13 @@ void GridSearch_LSTM(const std::string& dataFile,
         {128, 64, 32}
     };
 
-    // Constants for all runs
+    // Constants
     size_t epochs     = 800;
     size_t batchSize  = 32;
     bool bTrain       = true;
     bool bLoadAndTrain= false;
     bool shuffle      = true;
 
-    // Output CSV
     std::ofstream log(resultsCSV);
     log << "rho,stepSize,H1,H2,H3,Train_MSE,Test_MSE,Train_R2,Test_R2\n";
 
@@ -424,7 +452,7 @@ void GridSearch_LSTM(const std::string& dataFile,
 
                 arma::rowvec mins, maxs;
                 ApplyNormalization(normType, trainData, testData, mins, maxs,
-                                   normalizeOutputs, inputSize);
+                                   normalizeOutputs, inputSize, normalize_only_Outputs);
 
                 arma::cube trainX(inputSize, trainData.n_cols - rho, rho);
                 arma::cube trainY(outputSize, trainData.n_cols - rho, rho);
@@ -464,9 +492,9 @@ void GridSearch_LSTM(const std::string& dataFile,
                     << mseTrain << "," << mseTest << "," << r2Train << "," << r2Test << "\n";
 
                 SaveResults(predFile_Test,  predTest,  mins, maxs, testX,  testY,
-                            (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
+                            (int)inputSize, (int)outputSize, IO, normalizeOutputs, normalize_only_Outputs, normType);
                 SaveResults(predFile_Train, predTrain, mins, maxs, trainX, trainY,
-                            (int)inputSize, (int)outputSize, IO, normalizeOutputs, normType);
+                            (int)inputSize, (int)outputSize, IO, normalizeOutputs, normalize_only_Outputs, normType);
             }
         }
     }

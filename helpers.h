@@ -37,7 +37,8 @@ void ApplyNormalization(NormalizationType mode,
                         arma::rowvec& mins,
                         arma::rowvec& maxs,
                         bool normalizeOutputs,
-                        size_t inputSize);
+                        size_t inputSize,
+                        bool normalizeOnlyOutputs);
 
 /* ============================================================
  *                Time-Series Cube Preparation
@@ -64,14 +65,11 @@ void ValidateShapes(const arma::mat& data,
  *                Output Handling
  * ============================================================ */
 /**
- * SaveResults (unified version)
- * -----------------------------
- * Recreates the behavior of SaveResults_old(), but supports all normalization
- * types (PerVariable, MLpackMinMax, ZScore) and both ASM (IO=false) and IO=true datasets.
+ * @brief SaveResults (unified version)
  *
- * Saves unscaled input data (last slice) and corresponding predicted outputs
- * in original physical units. The last columns are predictions; preceding
- * columns are the data used to generate those predictions.
+ * Supports all normalization types (PerVariable, MLpackMinMax, ZScore)
+ * and both ASM (IO=false) and IO=true datasets. Saves unscaled input data
+ * and corresponding predicted outputs in original physical units.
  */
 void SaveResults(const std::string& filename,
                  arma::cube predictions,   // scaled predictions
@@ -83,6 +81,7 @@ void SaveResults(const std::string& filename,
                  int outputSize,
                  bool IO,
                  bool normalizeOutputs,
+                 bool normalizeOnlyOutputs,
                  NormalizationType normType = NormalizationType::PerVariable);
 
 /* ============================================================
