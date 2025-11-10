@@ -25,8 +25,8 @@ enum class NormalizationType
 /* ============================================================
  *                Metrics
  * ============================================================ */
-double ComputeMSE(arma::cube& pred, arma::cube& Y);
-double ComputeR2(arma::cube& pred, arma::cube& Y);
+double ComputeMSE(const arma::cube& pred, const arma::cube& Y);
+double ComputeR2(const arma::cube& pred, const arma::cube& Y);
 
 /* ============================================================
  *                Normalization

@@ -15,21 +15,31 @@ using namespace mlpack::data;
 /* ============================================================
  *                Metrics
  * ============================================================ */
-double ComputeMSE(arma::cube& pred, arma::cube& Y)
+double ComputeMSE(const arma::cube& pred, const arma::cube& Y)
 {
-    return accu(square(pred - Y)) / Y.n_elem;
+    return arma::accu(arma::square(pred - Y)) / static_cast<double>(Y.n_elem);
 }
 
-double ComputeR2(arma::cube& pred, arma::cube& Y)
+double ComputeR2(const arma::cube& pred, const arma::cube& Y)
 {
-    arma::vec yTrue = vectorise(Y);
-    arma::vec yPred = vectorise(pred);
+    // Manual size check (works for all Armadillo versions)
+    if (pred.n_rows != Y.n_rows ||
+        pred.n_cols != Y.n_cols ||
+        pred.n_slices != Y.n_slices)
+    {
+        std::cerr << "[ComputeR2] Error: prediction and target cubes have different shapes.\n";
+        return arma::datum::nan;
+    }
 
-    double ss_res = accu(square(yTrue - yPred));
-    double mean_y = mean(yTrue);
-    double ss_tot = accu(square(yTrue - mean_y));
+    arma::vec yTrue = arma::vectorise(Y);
+    arma::vec yPred = arma::vectorise(pred);
 
-    return (ss_tot == 0.0) ? 0.0 : 1.0 - (ss_res / ss_tot);
+    double ss_res = arma::accu(arma::square(yTrue - yPred));
+    double mean_y = arma::mean(yTrue);
+    double ss_tot = arma::accu(arma::square(yTrue - mean_y));
+
+    if (ss_tot < 1e-14) return 0.0;
+    return 1.0 - (ss_res / ss_tot);
 }
 
 /* ============================================================
