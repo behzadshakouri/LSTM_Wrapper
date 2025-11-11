@@ -132,11 +132,23 @@ void TrainCore(arma::mat& trainData,
 
     /* ------------------- Save Normalized Data ------------------- */
     {
-        std::string normPath = "/mnt/3rd900/Projects/LSTM_Wrapper/Results/";
-        std::string trainFile = normPath + "trainData_normalized.csv";
-        std::string testFile  = normPath + "testData_normalized.csv";
-        std::string minsFile  = normPath + "scaling_mins.csv";
-        std::string maxsFile  = normPath + "scaling_maxs.csv";
+        // ============================================================
+        // File Paths
+        // ============================================================
+    #ifdef PowerEdge
+        static std::string path = "/mnt/3rd900/Projects/LSTM_Wrapper/";
+    #elif defined(Behzad)
+        static std::string path = "/home/behzad/Projects/LSTM_Wrapper/";
+    #elif defined(Arash)
+        static std::string path = "/home/arash/Projects/LSTM_Wrapper/";
+    #else
+        static std::string path = "./"; ///< Fallback: current working directory
+    #endif
+
+        std::string trainFile = path + "trainData_normalized.csv";
+        std::string testFile  = path + "testData_normalized.csv";
+        std::string minsFile  = path + "scaling_mins.csv";
+        std::string maxsFile  = path + "scaling_maxs.csv";
 
         // Transpose for human readability: rows = samples, cols = features
         arma::mat trainT = trainData.t();

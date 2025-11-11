@@ -34,3 +34,11 @@ Final Results/sCOD_0/
 Build-Debug-6.9.0/
 
 Data/
+
+scaling_maxs.csv
+
+scaling_mins.csv
+
+trainData_normalized.csv
+
+testData_normalized.csv
