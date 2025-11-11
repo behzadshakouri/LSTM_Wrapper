@@ -198,6 +198,7 @@ void TrainCore(arma::mat& trainData,
         }
 
         cout << "Adam optimizer settings: β1=" << beta1
+             << " β1=" << beta1
              << ", β2=" << beta2
              << ", ε=" << epsilon
              << ", Tol=" << tolerance

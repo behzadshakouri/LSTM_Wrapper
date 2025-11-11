@@ -81,6 +81,8 @@ int main()
     // ============================================================
 #ifdef PowerEdge
     static std::string path = "/mnt/3rd900/Projects/LSTM_Wrapper/";
+#elif defined(SligoCreek)
+    static std::string path = "/media/arash/E/Projects/LSTM_Wrapper/";
 #elif defined(Behzad)
     static std::string path = "/home/behzad/Projects/LSTM_Wrapper/";
 #elif defined(Arash)

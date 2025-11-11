@@ -18,6 +18,9 @@ DEFINES += PowerEdge
 DEFINES += MLPACK_ENABLE_ANN_SERIALIZATION
 
 # Uncomment if building on other systems
+#CONFIG  += SligoCreek
+#DEFINES += SligoCreek
+
 # CONFIG += Behzad
 # DEFINES += Behzad
 
