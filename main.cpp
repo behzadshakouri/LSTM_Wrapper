@@ -63,7 +63,7 @@ int main()
     const double BETA1      = 0.9;
     const double BETA2      = 0.999;
     const double EPSILON    = 1e-8;
-    const double TOLERANCE  = 1e-8;
+    const double TOLERANCE  = 1e-12;
     const bool   SHUFFLE    = true; ///< false for strict time-series order
 
     // ============================================================
